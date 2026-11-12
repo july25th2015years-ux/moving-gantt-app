@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#13243b">
   <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。データはブラウザ内に保存されます。">
   <title>引っ越しガントチャート | MOVE PLAN</title>
-  <link rel="stylesheet" href="styles.css?v=1.2">
-  <script src="app.js?v=1.2" defer></script>
+  <link rel="stylesheet" href="styles.css?v=1.3">
+  <script src="app.js?v=1.3" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -38,7 +38,7 @@
           <div><p class="eyebrow eyebrow-muted">YOUR TIMELINE</p><h2 id="chart-title">全体ガントチャート <span id="taskCount" class="task-count"></span></h2></div>
           <div class="controls"><label class="filter-wrap" for="filterSelect"><span>表示：</span><select id="filterSelect"><option value="all">すべて</option><option value="open">未完了</option><option value="hold">要確認</option><option value="done">完了</option></select></label><button type="button" id="todayButton" class="btn btn-outline">今日へ移動</button></div>
         </div>
-        <div class="chart-hint"><span class="hint-icon" aria-hidden="true">↔</span><span>棒を左右にドラッグして日程変更、両端をドラッグして期間変更。タップでも編集できます。</span></div>
+        <div class="chart-hint"><span class="hint-icon" aria-hidden="true">↕</span><span>左側の「⠿」をドラッグしてタスクの並び替え。棒をドラッグして日程変更、タップで詳細編集できます。</span></div>
         <div class="legend"><span><i class="legend-dot planning"></i>未着手</span><span><i class="legend-dot doing"></i>進行中</span><span><i class="legend-dot waiting"></i>要確認</span><span><i class="legend-dot done"></i>完了</span><span class="legend-today"><i></i>今日</span></div>
         <div class="gantt-board" id="ganttBoard">
           <div class="task-sidebar"><div class="task-sidebar-title">タスク <span>クリックして編集</span></div><div id="taskSidebarRows"></div></div>

@@ -58,7 +58,7 @@ function loadTasks() { try { const data=JSON.parse(localStorage.getItem(STORAGE_
 function loadMoveDate(){try{const data=JSON.parse(localStorage.getItem(STORAGE_KEY));if(data&&validDate(data.moveDate))return data.moveDate;}catch(e){}return DEFAULT_MOVE_DATE;}
 function saveTasks(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,moveDate,tasks}));$("saveNotice").textContent="保存済み";}catch(err){$("saveNotice").textContent="保存できません。JSONでバックアップしてください";showToast("保存できませんでした。ブラウザの設定を確認してください");}}
 function showToast(message){const t=$("toast");t.textContent=message;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2500);}
-function visibleTasks(){const sorted=[...tasks].sort((a,b)=>isoToDay(a.start)-isoToDay(b.start)||isoToDay(a.end)-isoToDay(b.end));return sorted.filter(t=>filter==="all" || (filter==="open"&&t.status!=="done") || (filter==="hold"&&t.status==="hold") || (filter==="done"&&t.status==="done"));}
+function visibleTasks(){return tasks.filter(t=>filter==="all" || (filter==="open"&&t.status!=="done") || (filter==="hold"&&t.status==="hold") || (filter==="done"&&t.status==="done"));}
 function statusText(status){return ({todo:"未着手",doing:"進行中",hold:"要確認",done:"完了"})[status]||status;}
 function calculateBounds(){const dates=tasks.flatMap(t=>[isoToDay(t.start),isoToDay(t.end)]);dates.push(isoToDay(moveDate),isoToDay(localToday()));let min=Math.min(...dates,isoToDay("2026-11-12"))-3;let max=Math.max(...dates,isoToDay("2026-12-31"))+4;if(max-min>730){min=isoToDay(localToday())-30;max=isoToDay(localToday())+400;}timelineStart=min;timelineEnd=max;}
 function renderSummary(){const done=tasks.filter(t=>t.status==="done").length;const pct=tasks.length?Math.round(tasks.reduce((s,t)=>s+t.progress,0)/tasks.length):0;$("moveDate").textContent=dateLabel(moveDate);$("moveDateInput").value=moveDate;$("progressValue").textContent=pct;$("progressFill").style.width=pct+"%";$("doneValue").textContent=done;$("totalValue").textContent=tasks.length;$("holdValue").textContent=tasks.filter(t=>t.status==="hold").length;const priority=tasks.filter(t=>t.status==="hold").sort((a,b)=>a.start.localeCompare(b.start)).slice(0,4);$("priorityList").innerHTML=priority.length?priority.map(t=>`<div class="priority-item"><button type="button" data-edit="${escapeHtml(t.id)}">${escapeHtml(t.title)}</button><time>${formatDate(t.end)} まで</time></div>`).join(""):'<div class="priority-item">要確認のタスクはありません。</div>';$("priorityList").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));}
@@ -75,8 +75,9 @@ function renderChart({keepScroll=true}={}){
     const iso=dayToIso(day);dayCells.push(`<div class="day-cell ${wk===0||wk===6?"weekend":""} ${iso===localToday()?"today":""}" title="${iso}"><span>${d}</span><small>${"日月火水木金土"[wk]}</small></div>`);
   }months.push(`<div class="month-cell" style="width:${monthCount*cellWidth}px">${monthLabel}</div>`);
   $("monthHeader").innerHTML=months.join("");$("dayHeader").innerHTML=dayCells.join("");
-  $("taskSidebarRows").innerHTML=list.map((t,i)=>`<div class="task-item"><span class="task-index">${String(i+1).padStart(2,"0")}</span><button class="task-name" type="button" data-edit="${escapeHtml(t.id)}" title="${escapeHtml(t.title)}"><strong>${escapeHtml(t.title)}</strong><small>${formatDate(t.start)}–${formatDate(t.end)} · ${escapeHtml(t.category)}</small></button><span class="task-status-icon ${t.status}" title="${statusText(t.status)}">${({todo:"·",doing:"↗",hold:"!",done:"✓"})[t.status]}</span></div>`).join("");
+  $("taskSidebarRows").innerHTML=list.map((t,i)=>`<div class="task-item" data-id="${escapeHtml(t.id)}" data-index="${i}"><span class="drag-handle" role="button" tabindex="0" title="ドラッグまたは矢印キーで並び替え" aria-label="並び替え">⠿</span><span class="task-index">${String(i+1).padStart(2,"0")}</span><button class="task-name" type="button" data-edit="${escapeHtml(t.id)}" title="${escapeHtml(t.title)}"><strong>${escapeHtml(t.title)}</strong><small>${formatDate(t.start)}–${formatDate(t.end)} · ${escapeHtml(t.category)}</small></button><span class="task-status-icon ${t.status}" title="${statusText(t.status)}">${({todo:"·",doing:"↗",hold:"!",done:"✓"})[t.status]}</span></div>`).join("");
   $("taskSidebarRows").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));
+  attachTaskDragEvents($("taskSidebarRows"));
   const todayX=(isoToDay(localToday())-timelineStart)*cellWidth+(cellWidth/2);
   $("timelineRows").innerHTML=`<div class="today-line" style="left:${todayX}px"></div>`+list.map(t=>{
     const left=(isoToDay(t.start)-timelineStart)*cellWidth+4,width=(isoToDay(t.end)-isoToDay(t.start)+1)*cellWidth-8;
@@ -85,6 +86,101 @@ function renderChart({keepScroll=true}={}){
   $("timelineRows").querySelectorAll(".gantt-bar").forEach(attachBarEvents);
   $("emptyState").hidden=list.length!==0;
   scroller.scrollLeft=oldScrollX;scroller.scrollTop=oldScrollY;
+}
+function attachTaskDragEvents(container){
+  const items=Array.from(container.querySelectorAll(".task-item"));
+  items.forEach(item=>{
+    const handle=item.querySelector(".drag-handle");
+    let drag=null;
+    handle.addEventListener("pointerdown",e=>{
+      if(e.button!==0)return;
+      const allItems=Array.from(container.querySelectorAll(".task-item"));
+      const fromIndex=allItems.indexOf(item);
+      drag={pointerId:e.pointerId,pointerType:e.pointerType,startY:e.clientY,item,id:item.dataset.id,fromIndex,allItems,hasMoved:false,targetInfo:null};
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener("pointermove",e=>{
+      if(!drag||e.pointerId!==drag.pointerId)return;
+      const deltaY=e.clientY-drag.startY;
+      const threshold=drag.pointerType==="touch"?8:4;
+      if(!drag.hasMoved&&Math.abs(deltaY)>threshold){
+        drag.hasMoved=true;
+        drag.item.classList.add("is-dragging");
+        document.body.classList.add("is-sorting");
+      }
+      if(!drag.hasMoved)return;
+      drag.item.style.transform=`translateY(${deltaY}px)`;
+      drag.allItems.forEach(el=>el.classList.remove("drop-target-above","drop-target-below"));
+      
+      // ドロップ先の行と位置を判定
+      let found=null;
+      for(let i=0;i<drag.allItems.length;i++){
+        const el=drag.allItems[i];
+        if(el===drag.item)continue;
+        const r=el.getBoundingClientRect();
+        if(e.clientY>=r.top&&e.clientY<=r.bottom){
+          const pos=e.clientY<r.top+r.height/2?"above":"below";
+          found={el,id:el.dataset.id,pos};
+          break;
+        }
+      }
+      if(!found){
+        const first=drag.allItems[0],last=drag.allItems[drag.allItems.length-1];
+        if(first&&first!==drag.item&&e.clientY<first.getBoundingClientRect().top){
+          found={el:first,id:first.dataset.id,pos:"above"};
+        }else if(last&&last!==drag.item&&e.clientY>last.getBoundingClientRect().bottom){
+          found={el:last,id:last.dataset.id,pos:"below"};
+        }
+      }
+      if(found){
+        found.el.classList.add(found.pos==="above"?"drop-target-above":"drop-target-below");
+        drag.targetInfo=found;
+      }
+    });
+    const finish=e=>{
+      if(!drag||e.pointerId!==drag.pointerId)return;
+      const {hasMoved,id,targetInfo,allItems}=drag;
+      drag.item.style.transform="";
+      drag.item.classList.remove("is-dragging");
+      document.body.classList.remove("is-sorting");
+      allItems.forEach(el=>el.classList.remove("drop-target-above","drop-target-below"));
+      drag=null;
+      if(hasMoved&&targetInfo&&targetInfo.id!==id){
+        reorderTasks(id,targetInfo.id,targetInfo.pos);
+      }
+    };
+    handle.addEventListener("pointerup",finish);
+    handle.addEventListener("pointercancel",finish);
+    handle.addEventListener("keydown",e=>{
+      if(e.key==="ArrowUp"||e.key==="ArrowDown"){
+        e.preventDefault();
+        const allItems=Array.from(container.querySelectorAll(".task-item"));
+        const idx=allItems.indexOf(item);
+        const targetIdx=e.key==="ArrowUp"?idx-1:idx+1;
+        if(targetIdx>=0&&targetIdx<allItems.length){
+          const movingId=item.dataset.id;
+          const targetId=allItems[targetIdx].dataset.id;
+          reorderTasks(movingId,targetId,e.key==="ArrowUp"?"above":"below");
+          setTimeout(()=>{
+            container.querySelector(`.task-item[data-id="${movingId}"] .drag-handle`)?.focus();
+          },50);
+        }
+      }
+    });
+  });
+}
+function reorderTasks(movingId,targetId,position){
+  if(movingId===targetId)return;
+  const actualFrom=tasks.findIndex(t=>t.id===movingId);
+  const actualTarget=tasks.findIndex(t=>t.id===targetId);
+  if(actualFrom===-1||actualTarget===-1)return;
+  const [removed]=tasks.splice(actualFrom,1);
+  let newIndex=tasks.findIndex(t=>t.id===targetId);
+  if(position==="below")newIndex+=1;
+  tasks.splice(newIndex,0,removed);
+  saveTasks();
+  render();
+  showToast("タスクの並び順を変更しました");
 }
 function attachBarEvents(bar){
   let drag=null,suppress=false,suppressTimer=null;
