@@ -1,5 +1,5 @@
 "use strict";
-/** MOVE PLAN - no cloud data collection. All editable tasks are stored locally. */
+/** MOVE PLAN — shared storage with a local offline copy. */
 const STORAGE_KEY = "move-plan-2026-v1";
 const DAY_MS = 86400000;
 const DEFAULT_MOVE_DATE = "2026-12-19";
@@ -36,6 +36,74 @@ let timelineEnd;
 let cellWidth = 36;
 let toastTimer;
 let moveDate = loadMoveDate();
+const SYNC_URL = "https://moving-plan-sync-yoshida.july25th2015years.chatgpt.site/api/plans/moving-2026-shared-7c5f48b9a62e49b4";
+const PENDING_KEY=STORAGE_KEY+"-pending";
+let localSnapshot={moveDate,tasks:structuredClone(tasks)};
+let pending=[];
+try{const stored=JSON.parse(localStorage.getItem(PENDING_KEY));if(Array.isArray(stored))pending=stored;}catch{}
+let syncBusy=false,sharedReady=false,editorOriginal=null;
+function setSaveNotice(text){$("saveNotice").textContent=text;}
+function persistPending(){try{localStorage.setItem(PENDING_KEY,JSON.stringify(pending));}catch{setSaveNotice("端末に保存できません。バックアップしてください");}}
+function planDiff(before,after){
+ const change={},old=new Map(before.tasks.map(t=>[t.id,t]));
+ const patches=[];
+ for(const t of after.tasks){const prev=old.get(t.id);if(!prev){patches.push({id:t.id,add:t});continue;}const fields={};for(const key of ["title","start","end","status","category","notes","progress"])if(t[key]!==prev[key])fields[key]=t[key];if(Object.keys(fields).length)patches.push({id:t.id,fields});}
+ if(patches.length)change.patches=patches;
+ const ids=new Set(after.tasks.map(t=>t.id));const deleted=before.tasks.filter(t=>!ids.has(t.id)).map(t=>t.id);if(deleted.length)change.deleted=deleted;
+ const order=after.tasks.map(t=>t.id);if(JSON.stringify(order)!==JSON.stringify(before.tasks.map(t=>t.id)))change.order=order;
+ if(before.moveDate!==after.moveDate)change.moveDate=after.moveDate;
+ return change;
+}
+function applyChanges(state,changes){
+ const result=structuredClone(state);
+ for(const c of changes){
+  if(c.deleted)result.tasks=result.tasks.filter(t=>!c.deleted.includes(t.id));
+  for(const p of c.patches||[]){const t=result.tasks.find(t=>t.id===p.id);if(p.add){if(!t)result.tasks.push(structuredClone(p.add));}else if(t)Object.assign(t,p.fields);}
+  if(c.order){const rank=new Map(c.order.map((id,i)=>[id,i]));result.tasks.sort((a,b)=>(rank.get(a.id)??10000)-(rank.get(b.id)??10000));}
+  if(c.moveDate)result.moveDate=c.moveDate;
+ }
+ return result;
+}
+async function requestShared(method="GET",state,etag){
+ const headers={};if(state){headers["Content-Type"]="application/json";headers[etag==='"empty"'?"If-None-Match":"If-Match"]=etag==='"empty"'?"*":etag;}
+ return fetch(SYNC_URL,{method,headers,body:state?JSON.stringify(state):undefined,cache:"no-store",signal:AbortSignal.timeout(12000)});
+}
+function acceptShared(state){
+ const next=applyChanges(state,pending);tasks=next.tasks.map(normalizeTask);moveDate=next.moveDate;
+ localSnapshot={moveDate,tasks:structuredClone(tasks)};cacheState();render();
+}
+async function synchronize(){
+ if(syncBusy||document.body.classList.contains("is-sorting")||document.querySelector(".gantt-bar.dragging"))return;
+ syncBusy=true;
+ try{
+  for(let attempt=0;attempt<4;attempt++){
+   const response=await requestShared();if(!response.ok)throw new Error("read");
+   const etag=response.headers.get("ETag");if(!etag)throw new Error("etag");
+   const payload=await response.json();let remote=payload.state;
+   if(remote){if(!Array.isArray(remote.tasks)||!validDate(remote.moveDate))throw new Error("state");remote={moveDate:remote.moveDate,tasks:remote.tasks.map(normalizeTask)};}
+   const batch=pending.slice();
+   if(!remote||batch.length){
+    const next=remote?applyChanges(remote,batch):{moveDate,tasks:structuredClone(tasks)};
+    const saved=await requestShared("PUT",next,etag);
+    if(saved.status===412)continue;
+    if(!saved.ok)throw new Error("write");
+    pending.splice(0,batch.length);persistPending();remote=next;
+   }
+   if(!sharedReady){try{if(!localStorage.getItem(STORAGE_KEY+"-before-sharing"))localStorage.setItem(STORAGE_KEY+"-before-sharing",JSON.stringify(localSnapshot));}catch{}sharedReady=true;}
+   acceptShared(remote);setSaveNotice(pending.length?"共有へ保存中…":"共有に保存済み · 自動同期 ON");
+   return;
+  }
+  throw new Error("conflict");
+ }catch(err){setSaveNotice(pending.length?"未送信の変更あり · 再接続後に再送":"共有に接続できません · 再試行します");}
+ finally{syncBusy=false;}
+}
+function restoreLocalPlan(){
+ let data;try{data=JSON.parse(localStorage.getItem(STORAGE_KEY+"-before-sharing"));}catch{}
+ if(!data||!Array.isArray(data.tasks)){showToast("移行前の予定はありません");return;}
+ if(!sharedReady){showToast("共有に接続してからお試しください");return;}
+ if(!confirm("共有中の予定を、この端末の移行前の予定で置き換えますか？相手の画面にも反映されます。"))return;
+ tasks=data.tasks.map(normalizeTask);moveDate=data.moveDate;saveTasks();render();
+}
 
 function isoToDay(iso) { const [y,m,d] = iso.split("-").map(Number); return Math.round(Date.UTC(y,m-1,d)/DAY_MS); }
 function dayToIso(day) { return new Date(day*DAY_MS).toISOString().slice(0,10); }
@@ -56,7 +124,14 @@ function normalizeTask(obj, i) {
 function makeId() { return `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`; }
 function loadTasks() { try { const data=JSON.parse(localStorage.getItem(STORAGE_KEY)); if (data && Array.isArray(data.tasks) && data.tasks.length<=500) { const t=data.tasks.map(normalizeTask); if(new Set(t.map(x=>x.id)).size === t.length) return t; } } catch(err) { console.warn("保存済みデータは読み込めませんでした:",err); } return SEED_TASKS.map(x=>({...x})); }
 function loadMoveDate(){try{const data=JSON.parse(localStorage.getItem(STORAGE_KEY));if(data&&validDate(data.moveDate))return data.moveDate;}catch(e){}return DEFAULT_MOVE_DATE;}
-function saveTasks(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,moveDate,tasks}));$("saveNotice").textContent="保存済み";}catch(err){$("saveNotice").textContent="保存できません。JSONでバックアップしてください";showToast("保存できませんでした。ブラウザの設定を確認してください");}}
+function cacheState(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,moveDate,tasks}));return true;}catch{return false;}}
+function saveTasks(){
+  const next={moveDate,tasks:structuredClone(tasks)};
+  const change=planDiff(localSnapshot,next);
+  if(Object.keys(change).length)pending.push(change);
+  localSnapshot=next;
+  cacheState();persistPending();setSaveNotice("共有へ保存中…");void synchronize();
+}
 function showToast(message){const t=$("toast");t.textContent=message;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2500);}
 function visibleTasks(){return tasks.filter(t=>filter==="all" || (filter==="open"&&t.status!=="done") || (filter==="hold"&&t.status==="hold") || (filter==="done"&&t.status==="done"));}
 function statusText(status){return ({todo:"未着手",doing:"進行中",hold:"要確認",done:"完了"})[status]||status;}
@@ -221,20 +296,25 @@ function attachBarEvents(bar){
 }
 function scrollToToday(){const x=(isoToDay(localToday())-timelineStart)*cellWidth;$("ganttBoard").scrollTo({left:Math.max(0,x-180),behavior:"smooth"});}
 function render(options){renderSummary();renderChart(options);}
-function openEditor(id){const task=tasks.find(t=>t.id===id);$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=task?.status||"todo";$("taskCategory").value=task?.category||"その他";$("taskProgress").value=task?.progress??0;$("progressOutput").textContent=$("taskProgress").value+"%";$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
+function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=task?.status||"todo";$("taskCategory").value=task?.category||"その他";$("taskProgress").value=task?.progress??0;$("progressOutput").textContent=$("taskProgress").value+"%";$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
 function saveEditor(e){e.preventDefault();const id=$("taskId").value,title=$("taskTitle").value.trim(),start=$("taskStart").value,end=$("taskEnd").value,status=$("taskStatus").value,category=$("taskCategory").value;const error=$("formError");if(!title||!validDate(start)||!validDate(end)||isoToDay(start)>isoToDay(end)){error.textContent="タスク名、開始日、終了日を正しく入力してください。";error.hidden=false;return;}
   const old=tasks.find(t=>t.id===id);const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000)};
-  if(old)Object.assign(old,task);else tasks.push(task);
+  if(old){for(const key of ["title","start","end","status","category","progress","notes"])if(!editorOriginal||task[key]!==editorOriginal[key])old[key]=task[key];if(isoToDay(old.start)>isoToDay(old.end)){Object.assign(old,editorOriginal);error.textContent="相手の日程変更と重なりました。開き直して日付を確認してください。";error.hidden=false;return;}}else if(id&&editorOriginal){error.textContent="このタスクは相手が削除しました。閉じて一覧をご確認ください。";error.hidden=false;return;}else tasks.push(task);
   // A task named exactly "大型家電・家具の搬入" updates the move-day display.
-  if(task.id==="seed-17")moveDate=task.start;
-  closeEditor();saveTasks();render();showToast(old?"変更を保存しました":"タスクを追加しました");
+  if(task.id==="seed-17")moveDate=(old||task).start;
+  closeEditor();saveTasks();render();showToast(old?"変更を受け付けました":"タスクを追加しました");
 }
 function downloadJson(){const data={version:1,exportedAt:new Date().toISOString(),moveDate,tasks};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`move-plan-backup-${localToday()}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);showToast("バックアップファイルを保存しました");}
-async function importJson(file){if(!file)return;try{if(file.size>2_000_000)throw new Error("2MB以内のJSONファイルを選んでください。");const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.tasks)||data.tasks.length>500||data.tasks.length<0)throw new Error("タスクを含む正しいJSONファイルではありません。");const next=data.tasks.map(normalizeTask);if(new Set(next.map(t=>t.id)).size!==next.length)throw new Error("タスクIDが重複しています。");if(!confirm(`現在の予定をバックアップファイルの${next.length}件で置き換えますか？`))return;tasks=next;moveDate=validDate(data.moveDate)?data.moveDate:DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("バックアップを読み込みました");}catch(err){alert(`読み込みに失敗しました：${err.message}`);}finally{$("importFile").value="";}}
+async function importJson(file){if(!file)return;try{if(file.size>2_000_000)throw new Error("2MB以内のJSONファイルを選んでください。");const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.tasks)||data.tasks.length>500||data.tasks.length<0)throw new Error("タスクを含む正しいJSONファイルではありません。");const next=data.tasks.map(normalizeTask);if(new Set(next.map(t=>t.id)).size!==next.length)throw new Error("タスクIDが重複しています。");if(!confirm(`共有している全員の予定をバックアップファイルの${next.length}件で置き換えますか？`))return;tasks=next;moveDate=validDate(data.moveDate)?data.moveDate:DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("バックアップを読み込みました");}catch(err){alert(`読み込みに失敗しました：${err.message}`);}finally{$("importFile").value="";}}
 function init(){
+  $("restoreLocalButton").addEventListener("click",restoreLocalPlan);
+  window.addEventListener("online",()=>void synchronize());
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)void synchronize();});
+  setInterval(()=>{if(!document.hidden)void synchronize();},3000);
+  void synchronize();
   $("moveDateInput").addEventListener("change",e=>{if(!validDate(e.target.value))return;moveDate=e.target.value;saveTasks();render();showToast("引っ越し予定日を変更しました");});
-  $("addButton").addEventListener("click",()=>openEditor(null));$("todayButton").addEventListener("click",scrollToToday);$("filterSelect").addEventListener("change",e=>{filter=e.target.value;renderChart();});$("exportButton").addEventListener("click",downloadJson);$("importButton").addEventListener("click",()=>$("importFile").click());$("importFile").addEventListener("change",e=>importJson(e.target.files[0]));$("resetButton").addEventListener("click",()=>{if(!confirm("編集した予定をすべて消して初期予定に戻しますか？ 先にバックアップすることをおすすめします。"))return;tasks=SEED_TASKS.map(t=>({...t}));moveDate=DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("初期予定に戻しました");});
+  $("addButton").addEventListener("click",()=>openEditor(null));$("todayButton").addEventListener("click",scrollToToday);$("filterSelect").addEventListener("change",e=>{filter=e.target.value;renderChart();});$("exportButton").addEventListener("click",downloadJson);$("importButton").addEventListener("click",()=>$("importFile").click());$("importFile").addEventListener("change",e=>importJson(e.target.files[0]));$("resetButton").addEventListener("click",()=>{if(!confirm("共有している全員の予定をすべて消して初期予定に戻しますか？ 先にバックアップすることをおすすめします。"))return;tasks=SEED_TASKS.map(t=>({...t}));moveDate=DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("初期予定に戻しました");});
   $("closeDialog").addEventListener("click",closeEditor);$("cancelButton").addEventListener("click",closeEditor);$("taskDialog").addEventListener("click",e=>{if(e.target===$("taskDialog"))closeEditor();});$("taskForm").addEventListener("submit",saveEditor);$("taskProgress").addEventListener("input",e=>$("progressOutput").textContent=e.target.value+"%");$("taskStatus").addEventListener("change",e=>{if(e.target.value==="done"){$("taskProgress").value=100;$("progressOutput").textContent="100%";}});
   $("deleteButton").addEventListener("click",()=>{const id=$("taskId").value;if(!id)return;const t=tasks.find(x=>x.id===id);if(t&&!confirm(`「${t.title}」を削除しますか？`))return;tasks=tasks.filter(x=>x.id!==id);closeEditor();saveTasks();render();showToast("タスクを削除しました");});
   let resizeTimer;window.addEventListener("resize",()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>renderChart(),100);});

@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#13243b">
-  <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。データはブラウザ内に保存されます。">
+  <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。URLを共有した相手と予定を共同編集できます。">
   <title>引っ越しガントチャート | MOVE PLAN</title>
   <link rel="stylesheet" href="styles.css?v=1.3">
-  <script src="app.js?v=1.3" defer></script>
+  <script src="app.js?v=2.0" defer></script>
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand"><span class="brand-mark" aria-hidden="true">↗</span><span>MOVE <strong>PLAN</strong></span><span class="brand-tag">2026</span></div>
-      <div class="topbar-note"><span class="status-dot"></span>予定の変更をブラウザに自動保存</div>
+      <div class="topbar-note"><span class="status-dot"></span>予定を共有・自動同期（約3秒）</div>
     </header>
 
     <main class="main-content">
@@ -45,12 +45,12 @@
           <div class="timeline-scroll" id="timelineScroll" tabindex="0" aria-label="日付タイムライン（横スクロール可能）"><div class="timeline-content" id="timelineContent"><div class="month-header" id="monthHeader"></div><div class="day-header" id="dayHeader"></div><div id="timelineRows" class="timeline-rows"></div></div></div>
         </div>
         <div id="emptyState" class="empty-state" hidden>表示するタスクがありません。表示条件を変更してください。</div>
-        <div class="panel-footer"><span>※ 初期日程は仮案です。新居の契約確定後に、旧居の解約通知日などを調整してください。</span><span id="saveNotice" aria-live="polite">自動保存 ON</span></div>
+        <div class="panel-footer"><span>※ 初期日程は仮案です。新居の契約確定後に、旧居の解約通知日などを調整してください。</span><span id="saveNotice" aria-live="polite">共有に接続しています…</span></div>
       </section>
 
       <section class="bottom-grid">
         <article class="panel mini-panel"><div class="mini-header"><div><p class="eyebrow eyebrow-muted">PRIORITY</p><h2>先に確認したいこと</h2></div><span class="mini-icon" aria-hidden="true">!</span></div><div id="priorityList" class="priority-list"></div></article>
-        <article class="panel mini-panel"><div class="mini-header"><div><p class="eyebrow eyebrow-muted">DATA MANAGEMENT</p><h2>予定の保存と復元</h2></div><span class="mini-icon mini-icon-green" aria-hidden="true">↗</span></div><p class="data-description">変更した予定は、この端末のブラウザに自動保存されます。別のスマホやPCに移すときはバックアップを保存して読み込んでください。</p><div class="data-actions"><button class="btn btn-outline" type="button" id="importButton">JSONを読み込む</button><button class="btn btn-quiet" type="button" id="resetButton">初期予定に戻す</button><input id="importFile" type="file" accept=".json,application/json" hidden></div><p class="privacy-note">GitHubに保存するのはアプリのプログラムです。編集した予定は自動的にはGitHubへ送信されません。</p></article>
+        <article class="panel mini-panel"><div class="mini-header"><div><p class="eyebrow eyebrow-muted">DATA MANAGEMENT</p><h2>予定の保存と復元</h2></div><span class="mini-icon mini-icon-green" aria-hidden="true">↗</span></div><p class="data-description">予定は共通の保存先へ自動保存され、同じURLを開いた相手にも約3秒で反映されます。通信できない間の変更は、この端末に保存して再送します。</p><div class="data-actions"><button class="btn btn-outline" type="button" id="importButton">JSONを読み込む</button><button class="btn btn-outline" type="button" id="restoreLocalButton">この端末の以前の予定を共有</button><button class="btn btn-quiet" type="button" id="resetButton">初期予定に戻す</button><input id="importFile" type="file" accept=".json,application/json" hidden></div><p class="privacy-note">このURLを知っている人は予定の閲覧・編集ができます。共有開始前に入力した予定は「この端末の以前の予定を共有」から移せます。</p></article>
       </section>
     </main>
     <footer class="site-footer">MOVE PLAN — 予定が変わっても、計画を立て直せる。</footer>
