@@ -87,17 +87,18 @@ function renderChart({keepScroll=true}={}){
   scroller.scrollLeft=oldScroll;
 }
 function attachBarEvents(bar){
-  let drag=null,suppress=false;
+  let drag=null,suppress=false,suppressTimer=null;
   bar.addEventListener("pointerdown",e=>{
     if(e.button!==0)return; const t=tasks.find(x=>x.id===bar.dataset.id);if(!t)return;
     const mode=e.target?.dataset?.edge||"move";
-    drag={pointerId:e.pointerId,clientX:e.clientX,initialStart:isoToDay(t.start),initialEnd:isoToDay(t.end),mode,shift:0};
+    drag={pointerId:e.pointerId,pointerType:e.pointerType,clientX:e.clientX,initialStart:isoToDay(t.start),initialEnd:isoToDay(t.end),mode,shift:0};
     bar.setPointerCapture(e.pointerId);
   });
   bar.addEventListener("pointermove",e=>{
     if(!drag||e.pointerId!==drag.pointerId)return;
+    const threshold=drag.pointerType==="touch"?10:4;
     const shift=Math.round((e.clientX-drag.clientX)/cellWidth);drag.shift=shift;
-    if(Math.abs(e.clientX-drag.clientX)>4){suppress=true;bar.classList.add("dragging");}
+    if(Math.abs(e.clientX-drag.clientX)>threshold){suppress=true;bar.classList.add("dragging");}
     let from=drag.initialStart,to=drag.initialEnd;
     if(drag.mode==="move"){from+=shift;to+=shift;}
     if(drag.mode==="left")from=Math.min(drag.initialStart+shift,to);
@@ -107,15 +108,18 @@ function attachBarEvents(bar){
   const finish=e=>{
     if(!drag||e.pointerId!==drag.pointerId)return;
     const {shift,mode,initialStart,initialEnd}=drag;drag=null;bar.classList.remove("dragging");
-    if(shift!==0){const t=tasks.find(x=>x.id===bar.dataset.id);if(t){
-      let from=initialStart,to=initialEnd;if(mode==="move"){from+=shift;to+=shift;}
-      if(mode==="left")from=Math.min(initialStart+shift,to);if(mode==="right")to=Math.max(initialEnd+shift,from);
-      t.start=dayToIso(from);t.end=dayToIso(to);saveTasks();render();showToast("日程を変更しました");return;
-    }}
+    if(shift!==0){
+      const t=tasks.find(x=>x.id===bar.dataset.id);if(t){
+        let from=initialStart,to=initialEnd;if(mode==="move"){from+=shift;to+=shift;}
+        if(mode==="left")from=Math.min(initialStart+shift,to);if(mode==="right")to=Math.max(initialEnd+shift,from);
+        t.start=dayToIso(from);t.end=dayToIso(to);saveTasks();render();showToast("日程を変更しました");return;
+      }
+    }
     bar.style.left=((initialStart-timelineStart)*cellWidth+4)+"px";bar.style.width=((initialEnd-initialStart+1)*cellWidth-8)+"px";
+    if(suppress){clearTimeout(suppressTimer);suppressTimer=setTimeout(()=>{suppress=false;},200);}
   };
   bar.addEventListener("pointerup",finish);
-  bar.addEventListener("pointercancel",e=>{drag=null;bar.classList.remove("dragging");renderChart();});
+  bar.addEventListener("pointercancel",e=>{drag=null;bar.classList.remove("dragging");suppress=false;renderChart();});
   bar.addEventListener("click",e=>{if(suppress){suppress=false;return;}openEditor(bar.dataset.id);});
   bar.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openEditor(bar.dataset.id);}});
 }
@@ -135,7 +139,7 @@ async function importJson(file){if(!file)return;try{if(file.size>2_000_000)throw
 function init(){
   $("moveDateInput").addEventListener("change",e=>{if(!validDate(e.target.value))return;moveDate=e.target.value;saveTasks();render();showToast("引っ越し予定日を変更しました");});
   $("addButton").addEventListener("click",()=>openEditor(null));$("todayButton").addEventListener("click",scrollToToday);$("filterSelect").addEventListener("change",e=>{filter=e.target.value;renderChart();});$("exportButton").addEventListener("click",downloadJson);$("importButton").addEventListener("click",()=>$("importFile").click());$("importFile").addEventListener("change",e=>importJson(e.target.files[0]));$("resetButton").addEventListener("click",()=>{if(!confirm("編集した予定をすべて消して初期予定に戻しますか？ 先にバックアップすることをおすすめします。"))return;tasks=SEED_TASKS.map(t=>({...t}));moveDate=DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("初期予定に戻しました");});
-  $("closeDialog").addEventListener("click",closeEditor);$("cancelButton").addEventListener("click",closeEditor);$("taskForm").addEventListener("submit",saveEditor);$("taskProgress").addEventListener("input",e=>$("progressOutput").textContent=e.target.value+"%");$("taskStatus").addEventListener("change",e=>{if(e.target.value==="done"){$("taskProgress").value=100;$("progressOutput").textContent="100%";}});
+  $("closeDialog").addEventListener("click",closeEditor);$("cancelButton").addEventListener("click",closeEditor);$("taskDialog").addEventListener("click",e=>{if(e.target===$("taskDialog"))closeEditor();});$("taskForm").addEventListener("submit",saveEditor);$("taskProgress").addEventListener("input",e=>$("progressOutput").textContent=e.target.value+"%");$("taskStatus").addEventListener("change",e=>{if(e.target.value==="done"){$("taskProgress").value=100;$("progressOutput").textContent="100%";}});
   $("deleteButton").addEventListener("click",()=>{const id=$("taskId").value;if(!id)return;const t=tasks.find(x=>x.id===id);if(t&&!confirm(`「${t.title}」を削除しますか？`))return;tasks=tasks.filter(x=>x.id!==id);closeEditor();saveTasks();render();showToast("タスクを削除しました");});
   window.addEventListener("resize",()=>{const oldWidth=cellWidth;const newWidth=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));if(newWidth!==oldWidth)renderChart();});
   render({keepScroll:false});const initialX=(isoToDay("2026-11-12")-timelineStart)*cellWidth;$("timelineScroll").scrollLeft=Math.max(0,initialX-10);
