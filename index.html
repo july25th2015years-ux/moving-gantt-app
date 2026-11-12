@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#13243b">
   <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。URLを共有した相手と予定を共同編集できます。">
   <title>引っ越しガントチャート | MOVE PLAN</title>
-  <link rel="stylesheet" href="styles.css?v=1.3">
-  <script src="app.js?v=2.0" defer></script>
+  <link rel="stylesheet" href="styles.css?v=2.1">
+  <script src="app.js?v=2.1" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -62,7 +62,7 @@
       <label class="field field-wide">タスク名<input id="taskTitle" type="text" placeholder="例：引っ越し業者を予約する" maxlength="100" required></label>
       <div class="field-grid"><label class="field">開始日<input id="taskStart" type="date" required></label><label class="field">終了日<input id="taskEnd" type="date" required></label></div>
       <div class="field-grid"><label class="field">ステータス<select id="taskStatus"><option value="todo">未着手</option><option value="doing">進行中</option><option value="hold">要確認</option><option value="done">完了</option></select></label><label class="field">分類<select id="taskCategory"><option value="契約・手続き">契約・手続き</option><option value="業者・運搬">業者・運搬</option><option value="荷造り・片付け">荷造り・片付け</option><option value="当日・退去">当日・退去</option><option value="その他">その他</option></select></label></div>
-      <label class="field">進捗 <output id="progressOutput" for="taskProgress">0%</output><input id="taskProgress" type="range" min="0" max="100" step="10" value="0"></label>
+      <div class="field"><span class="field-label">進捗</span><div class="progress-segment" role="radiogroup" aria-label="進捗状況"><button type="button" class="segment-btn" data-progress="0">未着手</button><button type="button" class="segment-btn" data-progress="50">進行中</button><button type="button" class="segment-btn" data-progress="100">完了</button></div><input type="hidden" id="taskProgress" value="0"></div>
       <label class="field">メモ（任意）<textarea id="taskNotes" rows="3" maxlength="1000" placeholder="確認すること、担当者、注意点など"></textarea></label>
       <div id="formError" class="form-error" role="alert" hidden></div>
     </div>

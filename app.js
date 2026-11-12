@@ -296,7 +296,17 @@ function attachBarEvents(bar){
 }
 function scrollToToday(){const x=(isoToDay(localToday())-timelineStart)*cellWidth;$("ganttBoard").scrollTo({left:Math.max(0,x-180),behavior:"smooth"});}
 function render(options){renderSummary();renderChart(options);}
-function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=task?.status||"todo";$("taskCategory").value=task?.category||"その他";$("taskProgress").value=task?.progress??0;$("progressOutput").textContent=$("taskProgress").value+"%";$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
+function setProgressValue(val){
+  const num=Number(val)||0;
+  let target=0;
+  if(num>=100)target=100;
+  else if(num>0)target=50;
+  $("taskProgress").value=target;
+  document.querySelectorAll(".segment-btn").forEach(btn=>{
+    btn.classList.toggle("active",Number(btn.dataset.progress)===target);
+  });
+}
+function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=task?.status||"todo";$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
 function saveEditor(e){e.preventDefault();const id=$("taskId").value,title=$("taskTitle").value.trim(),start=$("taskStart").value,end=$("taskEnd").value,status=$("taskStatus").value,category=$("taskCategory").value;const error=$("formError");if(!title||!validDate(start)||!validDate(end)||isoToDay(start)>isoToDay(end)){error.textContent="タスク名、開始日、終了日を正しく入力してください。";error.hidden=false;return;}
   const old=tasks.find(t=>t.id===id);const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000)};
@@ -315,7 +325,21 @@ function init(){
   void synchronize();
   $("moveDateInput").addEventListener("change",e=>{if(!validDate(e.target.value))return;moveDate=e.target.value;saveTasks();render();showToast("引っ越し予定日を変更しました");});
   $("addButton").addEventListener("click",()=>openEditor(null));$("todayButton").addEventListener("click",scrollToToday);$("filterSelect").addEventListener("change",e=>{filter=e.target.value;renderChart();});$("exportButton").addEventListener("click",downloadJson);$("importButton").addEventListener("click",()=>$("importFile").click());$("importFile").addEventListener("change",e=>importJson(e.target.files[0]));$("resetButton").addEventListener("click",()=>{if(!confirm("共有している全員の予定をすべて消して初期予定に戻しますか？ 先にバックアップすることをおすすめします。"))return;tasks=SEED_TASKS.map(t=>({...t}));moveDate=DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("初期予定に戻しました");});
-  $("closeDialog").addEventListener("click",closeEditor);$("cancelButton").addEventListener("click",closeEditor);$("taskDialog").addEventListener("click",e=>{if(e.target===$("taskDialog"))closeEditor();});$("taskForm").addEventListener("submit",saveEditor);$("taskProgress").addEventListener("input",e=>$("progressOutput").textContent=e.target.value+"%");$("taskStatus").addEventListener("change",e=>{if(e.target.value==="done"){$("taskProgress").value=100;$("progressOutput").textContent="100%";}});
+  $("closeDialog").addEventListener("click",closeEditor);$("cancelButton").addEventListener("click",closeEditor);$("taskDialog").addEventListener("click",e=>{if(e.target===$("taskDialog"))closeEditor();});$("taskForm").addEventListener("submit",saveEditor);
+  document.querySelectorAll(".segment-btn").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const target=Number(btn.dataset.progress);
+      setProgressValue(target);
+      if(target===100){$("taskStatus").value="done";}
+      else if(target===50 && $("taskStatus").value==="todo"){$("taskStatus").value="doing";}
+      else if(target===0 && $("taskStatus").value==="done"){$("taskStatus").value="todo";}
+    });
+  });
+  $("taskStatus").addEventListener("change",e=>{
+    if(e.target.value==="done")setProgressValue(100);
+    else if(e.target.value==="doing")setProgressValue(50);
+    else if(e.target.value==="todo")setProgressValue(0);
+  });
   $("deleteButton").addEventListener("click",()=>{const id=$("taskId").value;if(!id)return;const t=tasks.find(x=>x.id===id);if(t&&!confirm(`「${t.title}」を削除しますか？`))return;tasks=tasks.filter(x=>x.id!==id);closeEditor();saveTasks();render();showToast("タスクを削除しました");});
   let resizeTimer;window.addEventListener("resize",()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>renderChart(),100);});
   render({keepScroll:false});const initialX=(isoToDay("2026-11-12")-timelineStart)*cellWidth;$("ganttBoard").scrollLeft=Math.max(0,initialX-10);
