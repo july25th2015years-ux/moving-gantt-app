@@ -63,7 +63,7 @@ function statusText(status){return ({todo:"未着手",doing:"進行中",hold:"�
 function calculateBounds(){const dates=tasks.flatMap(t=>[isoToDay(t.start),isoToDay(t.end)]);dates.push(isoToDay(moveDate),isoToDay(localToday()));let min=Math.min(...dates,isoToDay("2026-11-12"))-3;let max=Math.max(...dates,isoToDay("2026-12-31"))+4;if(max-min>730){min=isoToDay(localToday())-30;max=isoToDay(localToday())+400;}timelineStart=min;timelineEnd=max;}
 function renderSummary(){const done=tasks.filter(t=>t.status==="done").length;const pct=tasks.length?Math.round(tasks.reduce((s,t)=>s+t.progress,0)/tasks.length):0;$("moveDate").textContent=dateLabel(moveDate);$("moveDateInput").value=moveDate;$("progressValue").textContent=pct;$("progressFill").style.width=pct+"%";$("doneValue").textContent=done;$("totalValue").textContent=tasks.length;$("holdValue").textContent=tasks.filter(t=>t.status==="hold").length;const priority=tasks.filter(t=>t.status==="hold").sort((a,b)=>a.start.localeCompare(b.start)).slice(0,4);$("priorityList").innerHTML=priority.length?priority.map(t=>`<div class="priority-item"><button type="button" data-edit="${escapeHtml(t.id)}">${escapeHtml(t.title)}</button><time>${formatDate(t.end)} まで</time></div>`).join(""):'<div class="priority-item">要確認のタスクはありません。</div>';$("priorityList").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));}
 function renderChart({keepScroll=true}={}){
-  const scroller=$("timelineScroll");const oldScroll=keepScroll?scroller.scrollLeft:0;
+  const scroller=$("ganttBoard");const oldScrollX=keepScroll?scroller.scrollLeft:0;const oldScrollY=keepScroll?scroller.scrollTop:0;
   cellWidth=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell")) || 36;
   calculateBounds();const n=timelineEnd-timelineStart+1;$("timelineContent").style.width=n*cellWidth+"px";
   const list=visibleTasks();$("taskCount").textContent=`${list.length}件`;
@@ -84,7 +84,7 @@ function renderChart({keepScroll=true}={}){
   }).join("");
   $("timelineRows").querySelectorAll(".gantt-bar").forEach(attachBarEvents);
   $("emptyState").hidden=list.length!==0;
-  scroller.scrollLeft=oldScroll;
+  scroller.scrollLeft=oldScrollX;scroller.scrollTop=oldScrollY;
 }
 function attachBarEvents(bar){
   let drag=null,suppress=false,suppressTimer=null;
@@ -123,7 +123,7 @@ function attachBarEvents(bar){
   bar.addEventListener("click",e=>{if(suppress){suppress=false;return;}openEditor(bar.dataset.id);});
   bar.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openEditor(bar.dataset.id);}});
 }
-function scrollToToday(){const x=(isoToDay(localToday())-timelineStart)*cellWidth;$("timelineScroll").scrollTo({left:Math.max(0,x-230),behavior:"smooth"});}
+function scrollToToday(){const x=(isoToDay(localToday())-timelineStart)*cellWidth;$("ganttBoard").scrollTo({left:Math.max(0,x-180),behavior:"smooth"});}
 function render(options){renderSummary();renderChart(options);}
 function openEditor(id){const task=tasks.find(t=>t.id===id);$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=task?.status||"todo";$("taskCategory").value=task?.category||"その他";$("taskProgress").value=task?.progress??0;$("progressOutput").textContent=$("taskProgress").value+"%";$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
@@ -142,6 +142,6 @@ function init(){
   $("closeDialog").addEventListener("click",closeEditor);$("cancelButton").addEventListener("click",closeEditor);$("taskDialog").addEventListener("click",e=>{if(e.target===$("taskDialog"))closeEditor();});$("taskForm").addEventListener("submit",saveEditor);$("taskProgress").addEventListener("input",e=>$("progressOutput").textContent=e.target.value+"%");$("taskStatus").addEventListener("change",e=>{if(e.target.value==="done"){$("taskProgress").value=100;$("progressOutput").textContent="100%";}});
   $("deleteButton").addEventListener("click",()=>{const id=$("taskId").value;if(!id)return;const t=tasks.find(x=>x.id===id);if(t&&!confirm(`「${t.title}」を削除しますか？`))return;tasks=tasks.filter(x=>x.id!==id);closeEditor();saveTasks();render();showToast("タスクを削除しました");});
   let resizeTimer;window.addEventListener("resize",()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>renderChart(),100);});
-  render({keepScroll:false});const initialX=(isoToDay("2026-11-12")-timelineStart)*cellWidth;$("timelineScroll").scrollLeft=Math.max(0,initialX-10);
+  render({keepScroll:false});const initialX=(isoToDay("2026-11-12")-timelineStart)*cellWidth;$("ganttBoard").scrollLeft=Math.max(0,initialX-10);
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
