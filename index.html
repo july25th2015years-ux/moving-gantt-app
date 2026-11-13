@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#13243b">
   <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。URLを共有した相手と予定を共同編集できます。">
   <title>引っ越しガントチャート | MOVE PLAN</title>
-  <link rel="stylesheet" href="styles.css?v=2.3">
-  <script src="app.js?v=2.3" defer></script>
+  <link rel="stylesheet" href="styles.css?v=2.4">
+  <script src="app.js?v=2.4" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -63,6 +63,7 @@
       <div class="field-grid"><label class="field">開始日<input id="taskStart" type="date" required></label><label class="field">終了日<input id="taskEnd" type="date" required></label></div>
       <div class="field-grid"><label class="field">ステータス<select id="taskStatus"><option value="todo">未着手</option><option value="doing">進行中</option><option value="done">完了</option></select></label><label class="field">分類<select id="taskCategory"><option value="契約・手続き">契約・手続き</option><option value="業者・運搬">業者・運搬</option><option value="荷造り・片付け">荷造り・片付け</option><option value="当日・退去">当日・退去</option><option value="その他">その他</option></select></label></div>
       <div class="field"><span class="field-label">進捗</span><div class="progress-segment" role="radiogroup" aria-label="進捗状況"><button type="button" class="segment-btn" data-progress="0">未着手</button><button type="button" class="segment-btn" data-progress="50">進行中</button><button type="button" class="segment-btn" data-progress="100">完了</button></div><input type="hidden" id="taskProgress" value="0"></div>
+      <div class="field"><span class="field-label">予定の確定</span><button type="button" id="confirmToggleButton" class="confirm-toggle-btn" aria-pressed="false"><span class="confirm-toggle-icon">○</span><span class="confirm-toggle-text">タスクを確定する（背景を薄緑にする）</span></button><input type="hidden" id="taskConfirmed" value="false"></div>
       <label class="field">メモ（任意）<textarea id="taskNotes" rows="3" maxlength="1000" placeholder="確認すること、担当者、注意点など"></textarea></label>
       <div id="formError" class="form-error" role="alert" hidden></div>
     </div>

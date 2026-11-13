@@ -26,7 +26,7 @@ const SEED_TASKS = [
   ["旧居の清掃・最終チェック", "2026-12-20", "2026-12-21", "todo", "当日・退去", "忘れ物・公共料金メーター・返却物を確認"],
   ["旧居の鍵返却・退去", "2026-12-21", "2026-12-21", "todo", "当日・退去", "退去日は仮。解約日との整合性を確認"],
   ["転居届・住所変更・学校等の手続き", "2026-12-22", "2026-12-31", "todo", "契約・手続き", "引っ越し後は必要な行政・金融・学校関連の手続きを確認"]
-].map((row, i) => ({id: `seed-${i + 1}`, title:row[0], start:row[1], end:row[2], status:row[3], category:row[4], notes:row[5], progress:0}));
+].map((row, i) => ({id: `seed-${i + 1}`, title:row[0], start:row[1], end:row[2], status:row[3], category:row[4], notes:row[5], progress:0, confirmed:false}));
 
 const $ = id => document.getElementById(id);
 let tasks = loadTasks();
@@ -47,7 +47,7 @@ function persistPending(){try{localStorage.setItem(PENDING_KEY,JSON.stringify(pe
 function planDiff(before,after){
  const change={},old=new Map(before.tasks.map(t=>[t.id,t]));
  const patches=[];
- for(const t of after.tasks){const prev=old.get(t.id);if(!prev){patches.push({id:t.id,add:t});continue;}const fields={};for(const key of ["title","start","end","status","category","notes","progress"])if(t[key]!==prev[key])fields[key]=t[key];if(Object.keys(fields).length)patches.push({id:t.id,fields});}
+ for(const t of after.tasks){const prev=old.get(t.id);if(!prev){patches.push({id:t.id,add:t});continue;}const fields={};for(const key of ["title","start","end","status","category","notes","progress","confirmed"])if(t[key]!==prev[key])fields[key]=t[key];if(Object.keys(fields).length)patches.push({id:t.id,fields});}
  if(patches.length)change.patches=patches;
  const ids=new Set(after.tasks.map(t=>t.id));const deleted=before.tasks.filter(t=>!ids.has(t.id)).map(t=>t.id);if(deleted.length)change.deleted=deleted;
  const order=after.tasks.map(t=>t.id);if(JSON.stringify(order)!==JSON.stringify(before.tasks.map(t=>t.id)))change.order=order;
@@ -119,7 +119,8 @@ function normalizeTask(obj, i) {
   const id = typeof obj.id === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(obj.id) ? obj.id : makeId();
   const status = (obj.status === "hold" || !VALID_STATUSES.has(obj.status)) ? "todo" : obj.status;
   const progress = status === "done" ? 100 : Math.max(0, Math.min(100, Number(obj.progress) || 0));
-  return {id,title,start:obj.start,end:obj.end,status,category:VALID_CATEGORIES.has(obj.category)?obj.category:"その他",notes:String(obj.notes??"").slice(0,1000),progress};
+  const confirmed = Boolean(obj.confirmed);
+  return {id,title,start:obj.start,end:obj.end,status,category:VALID_CATEGORIES.has(obj.category)?obj.category:"その他",notes:String(obj.notes??"").slice(0,1000),progress,confirmed};
 }
 function makeId() { return `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`; }
 function loadTasks() { try { const data=JSON.parse(localStorage.getItem(STORAGE_KEY)); if (data && Array.isArray(data.tasks) && data.tasks.length<=500) { const t=data.tasks.map(normalizeTask); if(new Set(t.map(x=>x.id)).size === t.length) return t; } } catch(err) { console.warn("保存済みデータは読み込めませんでした:",err); } return SEED_TASKS.map(x=>({...x})); }
@@ -152,7 +153,9 @@ function renderChart({keepScroll=true}={}){
   $("monthHeader").innerHTML=months.join("");$("dayHeader").innerHTML=dayCells.join("");
   $("taskSidebarRows").innerHTML=list.map((t,i)=>{
     const st=(t.status==="done"||t.progress>=100)?"done":(t.status==="doing"||t.progress>0)?"doing":"todo";
-    return `<div class="task-item" data-id="${escapeHtml(t.id)}" data-index="${i}"><span class="drag-handle" role="button" tabindex="0" title="ドラッグまたは矢印キーで並び替え" aria-label="並び替え">⠿</span><span class="task-index">${String(i+1).padStart(2,"0")}</span><button class="task-name" type="button" data-edit="${escapeHtml(t.id)}" title="${escapeHtml(t.title)}"><strong>${escapeHtml(t.title)}</strong><div class="task-meta"><span class="task-status-badge ${st}">${statusText(st)}</span><small>${formatDate(t.start)}–${formatDate(t.end)} · ${escapeHtml(t.category)}</small></div></button></div>`;
+    const confClass=t.confirmed?" is-confirmed":"";
+    const confBadge=t.confirmed?'<span class="confirmed-badge" title="予定確定済み">確定</span>':"";
+    return `<div class="task-item${confClass}" data-id="${escapeHtml(t.id)}" data-index="${i}"><span class="drag-handle" role="button" tabindex="0" title="ドラッグまたは矢印キーで並び替え" aria-label="並び替え">⠿</span><span class="task-index">${String(i+1).padStart(2,"0")}</span><button class="task-name" type="button" data-edit="${escapeHtml(t.id)}" title="${escapeHtml(t.title)}"><strong>${escapeHtml(t.title)}${confBadge}</strong><div class="task-meta"><span class="task-status-badge ${st}">${statusText(st)}</span><small>${formatDate(t.start)}–${formatDate(t.end)} · ${escapeHtml(t.category)}</small></div></button></div>`;
   }).join("");
   $("taskSidebarRows").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));
   attachTaskDragEvents($("taskSidebarRows"));
@@ -310,11 +313,22 @@ function setProgressValue(val){
     btn.classList.toggle("active",Number(btn.dataset.progress)===target);
   });
 }
-function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=(task?.status==="hold"||!VALID_STATUSES.has(task?.status))?"todo":(task?.status||"todo");$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
+function setConfirmedValue(val){
+  const isConf=Boolean(val);
+  $("taskConfirmed").value=isConf?"true":"false";
+  const btn=$("confirmToggleButton");
+  if(btn){
+    btn.classList.toggle("is-active",isConf);
+    btn.setAttribute("aria-pressed",isConf?"true":"false");
+    btn.querySelector(".confirm-toggle-icon").textContent=isConf?"✓":"○";
+    btn.querySelector(".confirm-toggle-text").textContent=isConf?"タスク確定済み（薄緑で表示）":"タスクを確定する";
+  }
+}
+function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=(task?.status==="hold"||!VALID_STATUSES.has(task?.status))?"todo":(task?.status||"todo");$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);setConfirmedValue(task?.confirmed);$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
 function saveEditor(e){e.preventDefault();const id=$("taskId").value,title=$("taskTitle").value.trim(),start=$("taskStart").value,end=$("taskEnd").value,status=$("taskStatus").value,category=$("taskCategory").value;const error=$("formError");if(!title||!validDate(start)||!validDate(end)||isoToDay(start)>isoToDay(end)){error.textContent="タスク名、開始日、終了日を正しく入力してください。";error.hidden=false;return;}
-  const old=tasks.find(t=>t.id===id);const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000)};
-  if(old){for(const key of ["title","start","end","status","category","progress","notes"])if(!editorOriginal||task[key]!==editorOriginal[key])old[key]=task[key];if(isoToDay(old.start)>isoToDay(old.end)){Object.assign(old,editorOriginal);error.textContent="相手の日程変更と重なりました。開き直して日付を確認してください。";error.hidden=false;return;}}else if(id&&editorOriginal){error.textContent="このタスクは相手が削除しました。閉じて一覧をご確認ください。";error.hidden=false;return;}else tasks.push(task);
+  const old=tasks.find(t=>t.id===id);const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000),confirmed:$("taskConfirmed").value==="true"};
+  if(old){for(const key of ["title","start","end","status","category","progress","notes","confirmed"])if(!editorOriginal||task[key]!==editorOriginal[key])old[key]=task[key];if(isoToDay(old.start)>isoToDay(old.end)){Object.assign(old,editorOriginal);error.textContent="相手の日程変更と重なりました。開き直して日付を確認してください。";error.hidden=false;return;}}else if(id&&editorOriginal){error.textContent="このタスクは相手が削除しました。閉じて一覧をご確認ください。";error.hidden=false;return;}else tasks.push(task);
   // A task named exactly "大型家電・家具の搬入" updates the move-day display.
   if(task.id==="seed-17")moveDate=(old||task).start;
   closeEditor();saveTasks();render();showToast(old?"変更を受け付けました":"タスクを追加しました");
@@ -333,6 +347,7 @@ function init(){
   $("moveDateInput").addEventListener("change",e=>{if(!validDate(e.target.value))return;moveDate=e.target.value;saveTasks();render();showToast("引っ越し予定日を変更しました");});
   $("addButton").addEventListener("click",()=>openEditor(null));$("todayButton").addEventListener("click",scrollToToday);$("filterSelect").addEventListener("change",e=>{filter=e.target.value;renderChart();});$("exportButton").addEventListener("click",downloadJson);$("importButton").addEventListener("click",()=>$("importFile").click());$("importFile").addEventListener("change",e=>importJson(e.target.files[0]));$("resetButton").addEventListener("click",()=>{if(!confirm("共有している全員の予定をすべて消して初期予定に戻しますか？ 先にバックアップすることをおすすめします。"))return;tasks=SEED_TASKS.map(t=>({...t}));moveDate=DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("初期予定に戻しました");});
   $("closeDialog").addEventListener("click",closeEditor);$("cancelButton").addEventListener("click",closeEditor);$("taskDialog").addEventListener("click",e=>{if(e.target===$("taskDialog"))closeEditor();});$("taskForm").addEventListener("submit",saveEditor);
+  $("confirmToggleButton").addEventListener("click",()=>{const cur=$("taskConfirmed").value==="true";setConfirmedValue(!cur);});
   document.querySelectorAll(".segment-btn").forEach(btn=>{
     btn.addEventListener("click",()=>{
       const target=Number(btn.dataset.progress);
