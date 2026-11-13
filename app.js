@@ -3,16 +3,16 @@
 const STORAGE_KEY = "move-plan-2026-v1";
 const DAY_MS = 86400000;
 const DEFAULT_MOVE_DATE = "2026-12-19";
-const VALID_STATUSES = new Set(["todo", "doing", "hold", "done"]);
+const VALID_STATUSES = new Set(["todo", "doing", "done"]);
 const VALID_CATEGORIES = new Set(["契約・手続き", "業者・運搬", "荷造り・片付け", "当日・退去", "その他"]);
 const SEED_TASKS = [
-  ["物件・ペット可・学区などの条件確認", "2026-11-12", "2026-11-16", "hold", "契約・手続き", "入居前にペット条件や通学条件を確認"],
-  ["新居の申し込み・入居審査", "2026-11-13", "2026-11-20", "hold", "契約・手続き", "まだ申し込み前。審査完了日を確認"],
-  ["賃料発生日・初期費用を確定", "2026-11-14", "2026-11-20", "hold", "契約・手続き", "見積の日付は仮。新居の管理会社に確認"],
+  ["物件・ペット可・学区などの条件確認", "2026-11-12", "2026-11-16", "todo", "契約・手続き", "入居前にペット条件や通学条件を確認"],
+  ["新居の申し込み・入居審査", "2026-11-13", "2026-11-20", "todo", "契約・手続き", "まだ申し込み前。審査完了日を確認"],
+  ["賃料発生日・初期費用を確定", "2026-11-14", "2026-11-20", "todo", "契約・手続き", "見積の日付は仮。新居の管理会社に確認"],
   ["仲介手数料・不要なオプション確認", "2026-11-15", "2026-11-20", "todo", "契約・手続き", "仲介手数料0.55か月分への交渉。任意費用を確認"],
   ["火災保険の比較・契約", "2026-11-17", "2026-11-24", "todo", "契約・手続き", "自分で選べる条件。補償開始日は賃貸契約に合わせる"],
-  ["新居の契約締結・鍵受取日確認", "2026-11-20", "2026-11-25", "hold", "契約・手続き", "ここが決まってから旧居の解約通知を確定する"],
-  ["旧居へ解約予告を提出", "2026-11-20", "2026-11-21", "hold", "契約・手続き", "解約予告1か月前。旧居は日割り精算。新居契約を確認してから提出"],
+  ["新居の契約締結・鍵受取日確認", "2026-11-20", "2026-11-25", "todo", "契約・手続き", "ここが決まってから旧居の解約通知を確定する"],
+  ["旧居へ解約予告を提出", "2026-11-20", "2026-11-21", "todo", "契約・手続き", "解約予告1か月前。旧居は日割り精算。新居契約を確認してから提出"],
   ["大型家電・家具の採寸とリスト作成", "2026-11-16", "2026-11-23", "todo", "業者・運搬", "冷蔵庫・洗濯機・ベッドなどの寸法と搬入経路を確認"],
   ["大型家具のみ引越し業者へ見積・予約", "2026-11-19", "2026-11-28", "todo", "業者・運搬", "自力で運ぶ荷物と業者へ依頼する荷物を分ける"],
   ["不用品の整理・処分", "2026-11-25", "2026-12-10", "todo", "荷造り・片付け", "不要品の処分と譲渡・売却"],
@@ -20,11 +20,11 @@ const SEED_TASKS = [
   ["荷造り・持参する荷物の搬出準備", "2026-12-01", "2026-12-17", "todo", "荷造り・片付け", "使わない物から順に梱包"],
   ["電気・ガス・水道などの開始・停止手続き", "2026-12-02", "2026-12-16", "todo", "契約・手続き", "ガス開栓は立会いが必要か確認"],
   ["郵便転送・住所変更の準備", "2026-12-07", "2026-12-17", "todo", "契約・手続き", "郵便物の転送、学校関連の連絡を確認"],
-  ["新居の鍵受領・掃除", "2026-12-17", "2026-12-18", "hold", "当日・退去", "日付は仮。家賃発生日と鍵受領日に合わせて変更"],
+  ["新居の鍵受領・掃除", "2026-12-17", "2026-12-18", "todo", "当日・退去", "日付は仮。家賃発生日と鍵受領日に合わせて変更"],
   ["自分たちで運ぶ荷物の搬入", "2026-12-18", "2026-12-20", "todo", "当日・退去", "小さな荷物・日用品など"],
-  ["大型家電・家具の搬入", "2026-12-19", "2026-12-19", "hold", "当日・退去", "希望の搬入日。予約できた日付に変更"],
+  ["大型家電・家具の搬入", "2026-12-19", "2026-12-19", "todo", "当日・退去", "希望の搬入日。予約できた日付に変更"],
   ["旧居の清掃・最終チェック", "2026-12-20", "2026-12-21", "todo", "当日・退去", "忘れ物・公共料金メーター・返却物を確認"],
-  ["旧居の鍵返却・退去", "2026-12-21", "2026-12-21", "hold", "当日・退去", "退去日は仮。解約日との整合性を確認"],
+  ["旧居の鍵返却・退去", "2026-12-21", "2026-12-21", "todo", "当日・退去", "退去日は仮。解約日との整合性を確認"],
   ["転居届・住所変更・学校等の手続き", "2026-12-22", "2026-12-31", "todo", "契約・手続き", "引っ越し後は必要な行政・金融・学校関連の手続きを確認"]
 ].map((row, i) => ({id: `seed-${i + 1}`, title:row[0], start:row[1], end:row[2], status:row[3], category:row[4], notes:row[5], progress:0}));
 
@@ -117,8 +117,8 @@ function normalizeTask(obj, i) {
   const title=String(obj.title??"").trim().slice(0,100);
   if (!title || !validDate(obj.start) || !validDate(obj.end) || isoToDay(obj.start)>isoToDay(obj.end)) throw new Error(`${i+1}件目のタスク名または日付が不正です。`);
   const id = typeof obj.id === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(obj.id) ? obj.id : makeId();
-  const status=VALID_STATUSES.has(obj.status)?obj.status:"todo";
-  const progress=status==="done"?100:Math.max(0,Math.min(100,Number(obj.progress)||0));
+  const status = (obj.status === "hold" || !VALID_STATUSES.has(obj.status)) ? "todo" : obj.status;
+  const progress = status === "done" ? 100 : Math.max(0, Math.min(100, Number(obj.progress) || 0));
   return {id,title,start:obj.start,end:obj.end,status,category:VALID_CATEGORIES.has(obj.category)?obj.category:"その他",notes:String(obj.notes??"").slice(0,1000),progress};
 }
 function makeId() { return `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`; }
@@ -133,10 +133,10 @@ function saveTasks(){
   cacheState();persistPending();setSaveNotice("共有へ保存中…");void synchronize();
 }
 function showToast(message){const t=$("toast");t.textContent=message;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2500);}
-function visibleTasks(){return tasks.filter(t=>filter==="all" || (filter==="open"&&t.status!=="done") || (filter==="hold"&&t.status==="hold") || (filter==="done"&&t.status==="done"));}
-function statusText(status){return ({todo:"未着手",doing:"進行中",hold:"要確認",done:"完了"})[status]||status;}
+function visibleTasks(){return tasks.filter(t=>filter==="all" || (filter==="open"&&t.status!=="done") || (filter==="done"&&t.status==="done"));}
+function statusText(status){return ({todo:"未着手",doing:"進行中",done:"完了"})[status]||"未着手";}
 function calculateBounds(){const dates=tasks.flatMap(t=>[isoToDay(t.start),isoToDay(t.end)]);dates.push(isoToDay(moveDate),isoToDay(localToday()));let min=Math.min(...dates,isoToDay("2026-11-12"))-3;let max=Math.max(...dates,isoToDay("2026-12-31"))+4;if(max-min>730){min=isoToDay(localToday())-30;max=isoToDay(localToday())+400;}timelineStart=min;timelineEnd=max;}
-function renderSummary(){const done=tasks.filter(t=>t.status==="done").length;const pct=tasks.length?Math.round(tasks.reduce((s,t)=>s+t.progress,0)/tasks.length):0;$("moveDate").textContent=dateLabel(moveDate);$("moveDateInput").value=moveDate;$("progressValue").textContent=pct;$("progressFill").style.width=pct+"%";$("doneValue").textContent=done;$("totalValue").textContent=tasks.length;$("holdValue").textContent=tasks.filter(t=>t.status==="hold").length;const priority=tasks.filter(t=>t.status==="hold").sort((a,b)=>a.start.localeCompare(b.start)).slice(0,4);$("priorityList").innerHTML=priority.length?priority.map(t=>`<div class="priority-item"><button type="button" data-edit="${escapeHtml(t.id)}">${escapeHtml(t.title)}</button><time>${formatDate(t.end)} まで</time></div>`).join(""):'<div class="priority-item">要確認のタスクはありません。</div>';$("priorityList").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));}
+function renderSummary(){const done=tasks.filter(t=>t.status==="done").length;const todo=tasks.filter(t=>t.status==="todo").length;const pct=tasks.length?Math.round(tasks.reduce((s,t)=>s+t.progress,0)/tasks.length):0;$("moveDate").textContent=dateLabel(moveDate);$("moveDateInput").value=moveDate;$("progressValue").textContent=pct;$("progressFill").style.width=pct+"%";$("doneValue").textContent=done;$("totalValue").textContent=tasks.length;if($("todoValue"))$("todoValue").textContent=todo;const priority=tasks.filter(t=>t.status!=="done").sort((a,b)=>a.start.localeCompare(b.start)).slice(0,4);$("priorityList").innerHTML=priority.length?priority.map(t=>`<div class="priority-item"><button type="button" data-edit="${escapeHtml(t.id)}">${escapeHtml(t.title)}</button><time>${formatDate(t.end)} まで</time></div>`).join(""):'<div class="priority-item">未完了のタスクはありません。</div>';$("priorityList").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));}
 function renderChart({keepScroll=true}={}){
   const scroller=$("ganttBoard");const oldScrollX=keepScroll?scroller.scrollLeft:0;const oldScrollY=keepScroll?scroller.scrollTop:0;
   cellWidth=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell")) || 36;
@@ -150,13 +150,17 @@ function renderChart({keepScroll=true}={}){
     const iso=dayToIso(day);dayCells.push(`<div class="day-cell ${wk===0||wk===6?"weekend":""} ${iso===localToday()?"today":""}" title="${iso}"><span>${d}</span><small>${"日月火水木金土"[wk]}</small></div>`);
   }months.push(`<div class="month-cell" style="width:${monthCount*cellWidth}px">${monthLabel}</div>`);
   $("monthHeader").innerHTML=months.join("");$("dayHeader").innerHTML=dayCells.join("");
-  $("taskSidebarRows").innerHTML=list.map((t,i)=>`<div class="task-item" data-id="${escapeHtml(t.id)}" data-index="${i}"><span class="drag-handle" role="button" tabindex="0" title="ドラッグまたは矢印キーで並び替え" aria-label="並び替え">⠿</span><span class="task-index">${String(i+1).padStart(2,"0")}</span><button class="task-name" type="button" data-edit="${escapeHtml(t.id)}" title="${escapeHtml(t.title)}"><strong>${escapeHtml(t.title)}</strong><div class="task-meta"><span class="task-status-badge ${t.status}">${statusText(t.status)}</span><small>${formatDate(t.start)}–${formatDate(t.end)} · ${escapeHtml(t.category)}</small></div></button></div>`).join("");
+  $("taskSidebarRows").innerHTML=list.map((t,i)=>{
+    const st=(t.status==="done"||t.progress>=100)?"done":(t.status==="doing"||t.progress>0)?"doing":"todo";
+    return `<div class="task-item" data-id="${escapeHtml(t.id)}" data-index="${i}"><span class="drag-handle" role="button" tabindex="0" title="ドラッグまたは矢印キーで並び替え" aria-label="並び替え">⠿</span><span class="task-index">${String(i+1).padStart(2,"0")}</span><button class="task-name" type="button" data-edit="${escapeHtml(t.id)}" title="${escapeHtml(t.title)}"><strong>${escapeHtml(t.title)}</strong><div class="task-meta"><span class="task-status-badge ${st}">${statusText(st)}</span><small>${formatDate(t.start)}–${formatDate(t.end)} · ${escapeHtml(t.category)}</small></div></button></div>`;
+  }).join("");
   $("taskSidebarRows").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));
   attachTaskDragEvents($("taskSidebarRows"));
   const todayX=(isoToDay(localToday())-timelineStart)*cellWidth+(cellWidth/2);
   $("timelineRows").innerHTML=`<div class="today-line" style="left:${todayX}px"></div>`+list.map(t=>{
+    const st=(t.status==="done"||t.progress>=100)?"done":(t.status==="doing"||t.progress>0)?"doing":"todo";
     const left=(isoToDay(t.start)-timelineStart)*cellWidth+4,width=(isoToDay(t.end)-isoToDay(t.start)+1)*cellWidth-8;
-    return `<div class="timeline-row"><div class="gantt-bar ${t.status} ${width<95?"short":""}" role="button" tabindex="0" aria-label="${escapeHtml(t.title)}: ${escapeHtml(t.start)}から${escapeHtml(t.end)}。日付変更または編集" data-id="${escapeHtml(t.id)}" style="left:${left}px;width:${width}px"><span class="bar-handle" data-edge="left" title="開始日を変更"></span><span class="bar-text">${escapeHtml(t.title)}</span><span class="bar-handle" data-edge="right" title="終了日を変更"></span></div></div>`;
+    return `<div class="timeline-row"><div class="gantt-bar ${st} ${width<95?"short":""}" role="button" tabindex="0" aria-label="${escapeHtml(t.title)}: ${escapeHtml(t.start)}から${escapeHtml(t.end)}。日付変更または編集" data-id="${escapeHtml(t.id)}" style="left:${left}px;width:${width}px"><span class="bar-handle" data-edge="left" title="開始日を変更"></span><span class="bar-text">${escapeHtml(t.title)}</span><span class="bar-handle" data-edge="right" title="終了日を変更"></span></div></div>`;
   }).join("");
   $("timelineRows").querySelectorAll(".gantt-bar").forEach(attachBarEvents);
   $("emptyState").hidden=list.length!==0;
@@ -306,7 +310,7 @@ function setProgressValue(val){
     btn.classList.toggle("active",Number(btn.dataset.progress)===target);
   });
 }
-function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=task?.status||"todo";$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
+function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=(task?.status==="hold"||!VALID_STATUSES.has(task?.status))?"todo":(task?.status||"todo");$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
 function saveEditor(e){e.preventDefault();const id=$("taskId").value,title=$("taskTitle").value.trim(),start=$("taskStart").value,end=$("taskEnd").value,status=$("taskStatus").value,category=$("taskCategory").value;const error=$("formError");if(!title||!validDate(start)||!validDate(end)||isoToDay(start)>isoToDay(end)){error.textContent="タスク名、開始日、終了日を正しく入力してください。";error.hidden=false;return;}
   const old=tasks.find(t=>t.id===id);const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000)};
@@ -318,6 +322,9 @@ function saveEditor(e){e.preventDefault();const id=$("taskId").value,title=$("ta
 function downloadJson(){const data={version:1,exportedAt:new Date().toISOString(),moveDate,tasks};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`move-plan-backup-${localToday()}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);showToast("バックアップファイルを保存しました");}
 async function importJson(file){if(!file)return;try{if(file.size>2_000_000)throw new Error("2MB以内のJSONファイルを選んでください。");const data=JSON.parse(await file.text());if(!data||!Array.isArray(data.tasks)||data.tasks.length>500||data.tasks.length<0)throw new Error("タスクを含む正しいJSONファイルではありません。");const next=data.tasks.map(normalizeTask);if(new Set(next.map(t=>t.id)).size!==next.length)throw new Error("タスクIDが重複しています。");if(!confirm(`共有している全員の予定をバックアップファイルの${next.length}件で置き換えますか？`))return;tasks=next;moveDate=validDate(data.moveDate)?data.moveDate:DEFAULT_MOVE_DATE;saveTasks();render({keepScroll:false});showToast("バックアップを読み込みました");}catch(err){alert(`読み込みに失敗しました：${err.message}`);}finally{$("importFile").value="";}}
 function init(){
+  let needClean=false;
+  tasks.forEach(t=>{if(t.status==="hold"||!VALID_STATUSES.has(t.status)){t.status="todo";needClean=true;}});
+  if(needClean)saveTasks();
   $("restoreLocalButton").addEventListener("click",restoreLocalPlan);
   window.addEventListener("online",()=>void synchronize());
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)void synchronize();});

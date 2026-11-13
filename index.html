@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#13243b">
   <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。URLを共有した相手と予定を共同編集できます。">
   <title>引っ越しガントチャート | MOVE PLAN</title>
-  <link rel="stylesheet" href="styles.css?v=2.2">
-  <script src="app.js?v=2.2" defer></script>
+  <link rel="stylesheet" href="styles.css?v=2.3">
+  <script src="app.js?v=2.3" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -30,16 +30,16 @@
         <article class="summary-card"><div class="summary-label">引っ越し予定日</div><div class="summary-value" id="moveDate">12月19日</div><label class="move-date-edit">予定日を変更 <input type="date" id="moveDateInput" aria-label="引っ越し予定日を変更"></label></article>
         <article class="summary-card"><div class="summary-label">進捗率</div><div class="summary-value"><span id="progressValue">0</span><span class="summary-unit">%</span></div><div class="progress-track"><span class="progress-fill" id="progressFill"></span></div></article>
         <article class="summary-card"><div class="summary-label">完了タスク</div><div class="summary-value"><span id="doneValue">0</span><span class="summary-unit"> / <span id="totalValue">0</span>件</span></div><div class="summary-detail">1つずつ進めましょう</div></article>
-        <article class="summary-card"><div class="summary-label">要確認・調整</div><div class="summary-value"><span id="holdValue">0</span><span class="summary-unit">件</span></div><div class="summary-detail">契約・業者などを優先</div></article>
+        <article class="summary-card"><div class="summary-label">未着手タスク</div><div class="summary-value"><span id="todoValue">0</span><span class="summary-unit">件</span></div><div class="summary-detail">順次進めましょう</div></article>
       </section>
 
       <section class="panel chart-panel" aria-labelledby="chart-title">
         <div class="panel-header">
           <div><p class="eyebrow eyebrow-muted">YOUR TIMELINE</p><h2 id="chart-title">全体ガントチャート <span id="taskCount" class="task-count"></span></h2></div>
-          <div class="controls"><label class="filter-wrap" for="filterSelect"><span>表示：</span><select id="filterSelect"><option value="all">すべて</option><option value="open">未完了</option><option value="hold">要確認</option><option value="done">完了</option></select></label><button type="button" id="todayButton" class="btn btn-outline">今日へ移動</button></div>
+          <div class="controls"><label class="filter-wrap" for="filterSelect"><span>表示：</span><select id="filterSelect"><option value="all">すべて</option><option value="open">未完了</option><option value="done">完了</option></select></label><button type="button" id="todayButton" class="btn btn-outline">今日へ移動</button></div>
         </div>
         <div class="chart-hint"><span class="hint-icon" aria-hidden="true">↕</span><span>左側の「⠿」をドラッグしてタスクの並び替え。棒をドラッグして日程変更、タップで詳細編集できます。</span></div>
-        <div class="legend"><span><i class="legend-dot planning"></i>未着手</span><span><i class="legend-dot doing"></i>進行中</span><span><i class="legend-dot waiting"></i>要確認</span><span><i class="legend-dot done"></i>完了</span><span class="legend-today"><i></i>今日</span></div>
+        <div class="legend"><span><i class="legend-dot planning"></i>未着手</span><span><i class="legend-dot doing"></i>進行中</span><span><i class="legend-dot done"></i>完了</span><span class="legend-today"><i></i>今日</span></div>
         <div class="gantt-board" id="ganttBoard">
           <div class="task-sidebar"><div class="task-sidebar-title">タスク <span>クリックして編集</span></div><div id="taskSidebarRows"></div></div>
           <div class="timeline-scroll" id="timelineScroll" tabindex="0" aria-label="日付タイムライン（横スクロール可能）"><div class="timeline-content" id="timelineContent"><div class="month-header" id="monthHeader"></div><div class="day-header" id="dayHeader"></div><div id="timelineRows" class="timeline-rows"></div></div></div>
@@ -61,7 +61,7 @@
     <div class="dialog-body"><input id="taskId" type="hidden">
       <label class="field field-wide">タスク名<input id="taskTitle" type="text" placeholder="例：引っ越し業者を予約する" maxlength="100" required></label>
       <div class="field-grid"><label class="field">開始日<input id="taskStart" type="date" required></label><label class="field">終了日<input id="taskEnd" type="date" required></label></div>
-      <div class="field-grid"><label class="field">ステータス<select id="taskStatus"><option value="todo">未着手</option><option value="doing">進行中</option><option value="hold">要確認</option><option value="done">完了</option></select></label><label class="field">分類<select id="taskCategory"><option value="契約・手続き">契約・手続き</option><option value="業者・運搬">業者・運搬</option><option value="荷造り・片付け">荷造り・片付け</option><option value="当日・退去">当日・退去</option><option value="その他">その他</option></select></label></div>
+      <div class="field-grid"><label class="field">ステータス<select id="taskStatus"><option value="todo">未着手</option><option value="doing">進行中</option><option value="done">完了</option></select></label><label class="field">分類<select id="taskCategory"><option value="契約・手続き">契約・手続き</option><option value="業者・運搬">業者・運搬</option><option value="荷造り・片付け">荷造り・片付け</option><option value="当日・退去">当日・退去</option><option value="その他">その他</option></select></label></div>
       <div class="field"><span class="field-label">進捗</span><div class="progress-segment" role="radiogroup" aria-label="進捗状況"><button type="button" class="segment-btn" data-progress="0">未着手</button><button type="button" class="segment-btn" data-progress="50">進行中</button><button type="button" class="segment-btn" data-progress="100">完了</button></div><input type="hidden" id="taskProgress" value="0"></div>
       <label class="field">メモ（任意）<textarea id="taskNotes" rows="3" maxlength="1000" placeholder="確認すること、担当者、注意点など"></textarea></label>
       <div id="formError" class="form-error" role="alert" hidden></div>
