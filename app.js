@@ -327,8 +327,18 @@ function setConfirmedValue(val){
 function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=(task?.status==="hold"||!VALID_STATUSES.has(task?.status))?"todo":(task?.status||"todo");$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);setConfirmedValue(task?.confirmed);$("taskNotes").value=task?.notes||"";$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
 function saveEditor(e){e.preventDefault();const id=$("taskId").value,title=$("taskTitle").value.trim(),start=$("taskStart").value,end=$("taskEnd").value,status=$("taskStatus").value,category=$("taskCategory").value;const error=$("formError");if(!title||!validDate(start)||!validDate(end)||isoToDay(start)>isoToDay(end)){error.textContent="タスク名、開始日、終了日を正しく入力してください。";error.hidden=false;return;}
-  const old=tasks.find(t=>t.id===id);const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000),confirmed:$("taskConfirmed").value==="true"};
+  const old=tasks.find(t=>t.id===id);const wasDone=old?old.status==="done":false;const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000),confirmed:$("taskConfirmed").value==="true"};
   if(old){for(const key of ["title","start","end","status","category","progress","notes","confirmed"])if(!editorOriginal||task[key]!==editorOriginal[key])old[key]=task[key];if(isoToDay(old.start)>isoToDay(old.end)){Object.assign(old,editorOriginal);error.textContent="相手の日程変更と重なりました。開き直して日付を確認してください。";error.hidden=false;return;}}else if(id&&editorOriginal){error.textContent="このタスクは相手が削除しました。閉じて一覧をご確認ください。";error.hidden=false;return;}else tasks.push(task);
+  const targetTask=old||task;const isDone=targetTask.status==="done";
+  if(wasDone!==isDone){
+    const currentIdx=tasks.findIndex(t=>t.id===targetTask.id);
+    if(currentIdx!==-1){
+      tasks.splice(currentIdx,1);
+      let insertIdx=0;
+      for(let i=0;i<tasks.length;i++){if(tasks[i].status==="done")insertIdx=i+1;}
+      tasks.splice(insertIdx,0,targetTask);
+    }
+  }
   // A task named exactly "大型家電・家具の搬入" updates the move-day display.
   if(task.id==="seed-17")moveDate=(old||task).start;
   closeEditor();saveTasks();render();showToast(old?"変更を受け付けました":"タスクを追加しました");
