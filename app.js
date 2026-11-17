@@ -121,11 +121,15 @@ function normalizeTask(obj, i) {
   const progress = status === "done" ? 100 : Math.max(0, Math.min(100, Number(obj.progress) || 0));
   const confirmed = Boolean(obj.confirmed);
   const images = Array.isArray(obj.images)
-    ? obj.images.filter(img => img && typeof img.dataUrl === "string").slice(0, 5).map(img => ({
-        id: typeof img.id === "string" ? img.id : makeId(),
-        name: String(img.name || "image").slice(0, 100),
-        dataUrl: String(img.dataUrl)
-      }))
+    ? obj.images.filter(img => img && typeof img.dataUrl === "string").slice(0, 5).map(img => {
+        const isPdf = img.type === "pdf" || String(img.dataUrl).startsWith("data:application/pdf") || String(img.name || "").toLowerCase().endsWith(".pdf");
+        return {
+          id: typeof img.id === "string" ? img.id : makeId(),
+          name: String(img.name || (isPdf ? "document.pdf" : "image")).slice(0, 100),
+          type: isPdf ? "pdf" : "image",
+          dataUrl: String(img.dataUrl)
+        };
+      })
     : [];
   return {id,title,start:obj.start,end:obj.end,status,category:VALID_CATEGORIES.has(obj.category)?obj.category:"その他",notes:String(obj.notes??"").slice(0,1000),progress,confirmed,images};
 }
@@ -162,7 +166,7 @@ function renderChart({keepScroll=true}={}){
     const st=(t.status==="done"||t.progress>=100)?"done":(t.status==="doing"||t.progress>0)?"doing":"todo";
     const confClass=t.confirmed?" is-confirmed":"";
     const confBadge=t.confirmed?'<span class="confirmed-badge" title="予定確定済み">確定</span>':"";
-    const imgBadge=(t.images&&t.images.length>0)?`<span class="task-image-badge" title="添付画像 ${t.images.length}枚">📎${t.images.length}</span>`:"";
+    const imgBadge=(t.images&&t.images.length>0)?`<span class="task-image-badge" title="添付ファイル ${t.images.length}件">📎${t.images.length}</span>`:"";
     return `<div class="task-item${confClass}" data-id="${escapeHtml(t.id)}" data-index="${i}"><span class="drag-handle" role="button" tabindex="0" title="ドラッグまたは矢印キーで並び替え" aria-label="並び替え">⠿</span><span class="task-index">${String(i+1).padStart(2,"0")}</span><button class="task-name" type="button" data-edit="${escapeHtml(t.id)}" title="${escapeHtml(t.title)}"><strong>${escapeHtml(t.title)}${confBadge}</strong><div class="task-meta"><span class="task-status-badge ${st}">${statusText(st)}</span><small>${formatDate(t.start)}–${formatDate(t.end)} · ${escapeHtml(t.category)}</small>${imgBadge}</div></button></div>`;
   }).join("");
   $("taskSidebarRows").querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>openEditor(b.dataset.edit)));
@@ -333,6 +337,31 @@ function setConfirmedValue(val){
   }
 }
 let currentEditorImages=[];
+let currentPreviewBlobUrl=null;
+function dataUrlToBlob(dataUrl){
+  const arr=dataUrl.split(",");
+  const mimeMatch=arr[0].match(/:(.*?);/);
+  const mime=mimeMatch?mimeMatch[1]:"application/octet-stream";
+  const bstr=atob(arr[1]);
+  let n=bstr.length;
+  const u8arr=new Uint8Array(n);
+  while(n--){u8arr[n]=bstr.charCodeAt(n);}
+  return new Blob([u8arr],{type:mime});
+}
+function readPdfAsDataUrl(file){
+  return new Promise((resolve,reject)=>{
+    if(file.size>2_000_000){
+      reject(new Error(`PDF「${file.name}」は2MBを超えているため添付できません。2MB以下のファイルをお選びください。`));
+      return;
+    }
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error("PDFファイルの読み込みに失敗しました。"));
+    reader.onload=e=>{
+      resolve({id:makeId(),name:file.name,type:"pdf",dataUrl:e.target.result});
+    };
+    reader.readAsDataURL(file);
+  });
+}
 function compressImage(file,maxSide=1000,quality=0.75){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -351,7 +380,7 @@ function compressImage(file,maxSide=1000,quality=0.75){
         const ctx=canvas.getContext("2d");
         ctx.drawImage(img,0,0,w,h);
         const dataUrl=canvas.toDataURL("image/jpeg",quality);
-        resolve({id:makeId(),name:file.name,dataUrl});
+        resolve({id:makeId(),name:file.name,type:"image",dataUrl});
       };
       img.src=e.target.result;
     };
@@ -361,20 +390,33 @@ function compressImage(file,maxSide=1000,quality=0.75){
 function renderImageGallery(){
   const gallery=$("imageGallery");const countText=$("imageCount");const addBtn=$("addImageButton");
   if(!gallery||!countText)return;
-  countText.textContent=`${currentEditorImages.length} / 5枚`;
+  countText.textContent=`${currentEditorImages.length} / 5点`;
   if(addBtn)addBtn.disabled=currentEditorImages.length>=5;
-  gallery.innerHTML=currentEditorImages.map((img,idx)=>`
-    <div class="image-thumb-card" data-index="${idx}">
-      <button type="button" class="image-thumb-btn" data-preview-idx="${idx}" title="タップして拡大">
-        <img class="image-thumb-img" src="${escapeHtml(img.dataUrl)}" alt="${escapeHtml(img.name||'添付画像')}">
-      </button>
-      <button type="button" class="image-remove-btn" data-remove-idx="${idx}" aria-label="画像を削除" title="削除">×</button>
-    </div>
-  `).join("");
+  gallery.innerHTML=currentEditorImages.map((item,idx)=>{
+    if(item.type==="pdf"||String(item.dataUrl).startsWith("data:application/pdf")){
+      return `
+        <div class="image-thumb-card pdf-thumb-card" data-index="${idx}">
+          <button type="button" class="image-thumb-btn pdf-thumb-btn" data-preview-idx="${idx}" title="${escapeHtml(item.name||'PDF書類')} (タップしてプレビュー)">
+            <span class="pdf-icon-badge">PDF</span>
+            <span class="pdf-thumb-name">${escapeHtml(item.name||'PDF書類')}</span>
+          </button>
+          <button type="button" class="image-remove-btn" data-remove-idx="${idx}" aria-label="ファイルを削除" title="削除">×</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="image-thumb-card" data-index="${idx}">
+        <button type="button" class="image-thumb-btn" data-preview-idx="${idx}" title="${escapeHtml(item.name||'添付画像')} (タップして拡大)">
+          <img class="image-thumb-img" src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.name||'添付画像')}">
+        </button>
+        <button type="button" class="image-remove-btn" data-remove-idx="${idx}" aria-label="ファイルを削除" title="削除">×</button>
+      </div>
+    `;
+  }).join("");
   gallery.querySelectorAll("[data-preview-idx]").forEach(b=>{
     b.addEventListener("click",()=>{
       const idx=Number(b.dataset.previewIdx);
-      openImagePreview(currentEditorImages[idx]?.dataUrl);
+      openFilePreview(currentEditorImages[idx]);
     });
   });
   gallery.querySelectorAll("[data-remove-idx]").forEach(b=>{
@@ -385,14 +427,37 @@ function renderImageGallery(){
     });
   });
 }
-function openImagePreview(dataUrl){
-  if(!dataUrl)return;
-  $("imagePreviewImg").src=dataUrl;
+function openFilePreview(item){
+  if(!item)return;
+  if(item.type==="pdf"||String(item.dataUrl).startsWith("data:application/pdf")){
+    $("imagePreviewImg").hidden=true;
+    $("imagePreviewImg").src="";
+    $("pdfPreviewContainer").hidden=false;
+    $("pdfPreviewTitle").textContent=item.name||"PDF書類";
+    try{
+      if(currentPreviewBlobUrl)URL.revokeObjectURL(currentPreviewBlobUrl);
+      const blob=dataUrlToBlob(item.dataUrl);
+      currentPreviewBlobUrl=URL.createObjectURL(blob);
+      $("pdfOpenExternalBtn").href=currentPreviewBlobUrl;
+      $("pdfOpenExternalBtn").setAttribute("download",item.name||"document.pdf");
+      $("pdfPreviewFrame").src=currentPreviewBlobUrl;
+    }catch(err){
+      console.error("PDF Blob作成エラー:",err);
+    }
+  }else{
+    if(currentPreviewBlobUrl){URL.revokeObjectURL(currentPreviewBlobUrl);currentPreviewBlobUrl=null;}
+    $("pdfPreviewContainer").hidden=true;
+    $("pdfPreviewFrame").src="about:blank";
+    $("imagePreviewImg").hidden=false;
+    $("imagePreviewImg").src=item.dataUrl;
+  }
   $("imagePreviewDialog").showModal();
 }
-function closeImagePreview(){
+function closeFilePreview(){
   $("imagePreviewDialog").close();
   $("imagePreviewImg").src="";
+  $("pdfPreviewFrame").src="about:blank";
+  if(currentPreviewBlobUrl){URL.revokeObjectURL(currentPreviewBlobUrl);currentPreviewBlobUrl=null;}
 }
 function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=(task?.status==="hold"||!VALID_STATUSES.has(task?.status))?"todo":(task?.status||"todo");$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);setConfirmedValue(task?.confirmed);$("taskNotes").value=task?.notes||"";currentEditorImages=task&&Array.isArray(task.images)?structuredClone(task.images):[];renderImageGallery();$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
@@ -433,24 +498,32 @@ function init(){
     const files=Array.from(e.target.files||[]);
     if(!files.length)return;
     const remaining=5-currentEditorImages.length;
-    if(remaining<=0){alert("画像は最大5枚まで添付できます。");return;}
+    if(remaining<=0){alert("添付ファイルは最大5点まで追加できます。");return;}
     const targets=files.slice(0,remaining);
     try{
       for(const file of targets){
-        if(!file.type.startsWith("image/"))continue;
-        const compressed=await compressImage(file);
-        currentEditorImages.push(compressed);
+        const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
+        const isImg=file.type.startsWith("image/");
+        if(isPdf){
+          const pdfItem=await readPdfAsDataUrl(file);
+          currentEditorImages.push(pdfItem);
+        }else if(isImg){
+          const imgItem=await compressImage(file);
+          currentEditorImages.push(imgItem);
+        }else{
+          alert(`「${file.name}」は非対応の形式です。画像またはPDFファイルを選択してください。`);
+        }
       }
       renderImageGallery();
     }catch(err){
-      console.error("画像読み込みエラー:",err);
-      alert("画像の読み込みに失敗しました。");
+      console.error("ファイル読み込みエラー:",err);
+      alert(err.message||"ファイルの読み込みに失敗しました。");
     }finally{
       $("taskImageInput").value="";
     }
   });
-  $("closeImagePreview").addEventListener("click",closeImagePreview);
-  $("imagePreviewDialog").addEventListener("click",e=>{if(e.target===$("imagePreviewDialog"))closeImagePreview();});
+  $("closeImagePreview").addEventListener("click",closeFilePreview);
+  $("imagePreviewDialog").addEventListener("click",e=>{if(e.target===$("imagePreviewDialog"))closeFilePreview();});
   document.querySelectorAll(".segment-btn").forEach(btn=>{
     btn.addEventListener("click",()=>{
       const target=Number(btn.dataset.progress);
