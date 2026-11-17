@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#13243b">
   <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。URLを共有した相手と予定を共同編集できます。">
   <title>引っ越しガントチャート | MOVE PLAN</title>
-  <link rel="stylesheet" href="styles.css?v=2.5">
-  <script src="app.js?v=2.5" defer></script>
+  <link rel="stylesheet" href="styles.css?v=2.6">
+  <script src="app.js?v=2.6" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -65,10 +65,19 @@
       <div class="field"><span class="field-label">進捗</span><div class="progress-segment" role="radiogroup" aria-label="進捗状況"><button type="button" class="segment-btn" data-progress="0">未着手</button><button type="button" class="segment-btn" data-progress="50">進行中</button><button type="button" class="segment-btn" data-progress="100">完了</button></div><input type="hidden" id="taskProgress" value="0"></div>
       <div class="field"><span class="field-label">予定の確定</span><button type="button" id="confirmToggleButton" class="confirm-toggle-btn" aria-pressed="false"><span class="confirm-toggle-icon">○</span><span class="confirm-toggle-text">タスクを確定する（背景を薄緑にする）</span></button><input type="hidden" id="taskConfirmed" value="false"></div>
       <label class="field">メモ（任意）<textarea id="taskNotes" rows="3" maxlength="1000" placeholder="確認すること、担当者、注意点など"></textarea></label>
+      <div class="field">
+        <div class="field-header-row"><span class="field-label">添付画像（最大5枚）</span><span id="imageCount" class="image-count-text">0 / 5枚</span></div>
+        <div id="imageGallery" class="image-gallery"></div>
+        <div class="image-upload-wrap">
+          <button type="button" id="addImageButton" class="btn-add-image"><span class="add-image-icon">＋</span><span>画像を追加する</span></button>
+          <input type="file" id="taskImageInput" accept="image/*" multiple hidden>
+        </div>
+      </div>
       <div id="formError" class="form-error" role="alert" hidden></div>
     </div>
     <div class="dialog-footer"><button type="button" class="btn btn-delete" id="deleteButton">削除</button><div class="dialog-footer-right"><button type="button" class="btn btn-quiet" id="cancelButton">キャンセル</button><button type="submit" class="btn btn-primary">保存する</button></div></div>
   </form></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="imagePreviewDialog" class="image-preview-dialog" aria-label="画像プレビュー"><div class="preview-dialog-content"><button type="button" id="closeImagePreview" class="preview-close-btn" aria-label="プレビューを閉じる">×</button><img id="imagePreviewImg" src="" alt="添付画像拡大プレビュー"></div></dialog>
 </body>
 </html>
