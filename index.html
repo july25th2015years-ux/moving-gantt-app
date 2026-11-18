@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#13243b">
   <meta name="description" content="引っ越しの予定を自由に編集できるガントチャート。URLを共有した相手と予定を共同編集できます。">
   <title>引っ越しガントチャート | MOVE PLAN</title>
-  <link rel="stylesheet" href="styles.css?v=2.7">
-  <script src="app.js?v=2.7" defer></script>
+  <link rel="stylesheet" href="styles.css?v=2.8">
+  <script src="app.js?v=2.8" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -66,7 +66,7 @@
       <div class="field"><span class="field-label">予定の確定</span><button type="button" id="confirmToggleButton" class="confirm-toggle-btn" aria-pressed="false"><span class="confirm-toggle-icon">○</span><span class="confirm-toggle-text">タスクを確定する（背景を薄緑にする）</span></button><input type="hidden" id="taskConfirmed" value="false"></div>
       <label class="field">メモ（任意）<textarea id="taskNotes" rows="3" maxlength="1000" placeholder="確認すること、担当者、注意点など"></textarea></label>
       <div class="field">
-        <div class="field-header-row"><span class="field-label">添付ファイル（画像・PDF 最大5点）</span><span id="imageCount" class="image-count-text">0 / 5点</span></div>
+        <div class="field-header-row"><span class="field-label">添付ファイル（画像・PDF 最大5点 / PDFは500KBまで）</span><span id="imageCount" class="image-count-text">0 / 5点</span></div>
         <div id="imageGallery" class="image-gallery"></div>
         <div class="image-upload-wrap">
           <button type="button" id="addImageButton" class="btn-add-image"><span class="add-image-icon">＋</span><span>画像・PDFを追加する</span></button>

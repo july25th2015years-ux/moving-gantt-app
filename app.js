@@ -41,8 +41,8 @@ const PENDING_KEY=STORAGE_KEY+"-pending";
 let localSnapshot={moveDate,tasks:structuredClone(tasks)};
 let pending=[];
 try{const stored=JSON.parse(localStorage.getItem(PENDING_KEY));if(Array.isArray(stored))pending=stored;}catch{}
-let syncBusy=false,sharedReady=false,editorOriginal=null;
-function setSaveNotice(text){$("saveNotice").textContent=text;}
+let syncBusy=false,sharedReady=false,editorOriginal=null,tooLargeNotified=false;
+function setSaveNotice(text,isError=false){const el=$("saveNotice");el.textContent=text;el.classList.toggle("is-error",Boolean(isError));}
 function persistPending(){try{localStorage.setItem(PENDING_KEY,JSON.stringify(pending));}catch{setSaveNotice("端末に保存できません。バックアップしてください");}}
 function planDiff(before,after){
  const change={},old=new Map(before.tasks.map(t=>[t.id,t]));
@@ -86,15 +86,24 @@ async function synchronize(){
     const next=remote?applyChanges(remote,batch):{moveDate,tasks:structuredClone(tasks)};
     const saved=await requestShared("PUT",next,etag);
     if(saved.status===412)continue;
+    if(saved.status===413){const err=new Error("too_large");err.code=413;throw err;}
     if(!saved.ok)throw new Error("write");
     pending.splice(0,batch.length);persistPending();remote=next;
    }
    if(!sharedReady){try{if(!localStorage.getItem(STORAGE_KEY+"-before-sharing"))localStorage.setItem(STORAGE_KEY+"-before-sharing",JSON.stringify(localSnapshot));}catch{}sharedReady=true;}
-   acceptShared(remote);setSaveNotice(pending.length?"共有へ保存中…":"共有に保存済み · 自動同期 ON");
+   tooLargeNotified=false;
+   acceptShared(remote);setSaveNotice(pending.length?"共有へ保存中…":"共有に保存済み · 自動同期 ON",false);
    return;
   }
   throw new Error("conflict");
- }catch(err){setSaveNotice(pending.length?"未送信の変更あり · 再接続後に再送":"共有に接続できません · 再試行します");}
+ }catch(err){
+  if(err&&err.code===413){
+   setSaveNotice("⚠️ 容量オーバー：添付ファイルを削除するか小さくしてください",true);
+   if(!tooLargeNotified){tooLargeNotified=true;showToast("⚠️ 容量オーバーのため共有できません。添付ファイルを減らしてください");}
+  }else{
+   setSaveNotice(pending.length?"未送信の変更あり · 再接続後に再送":"共有に接続できません · 再試行します",false);
+  }
+ }
  finally{syncBusy=false;}
 }
 function restoreLocalPlan(){
@@ -348,10 +357,20 @@ function dataUrlToBlob(dataUrl){
   while(n--){u8arr[n]=bstr.charCodeAt(n);}
   return new Blob([u8arr],{type:mime});
 }
+const MAX_PDF_BYTES=500_000;
+const MAX_SYNC_BYTES=920_000;
+function estimateTotalBytesWithEditor(candidateImages,editingId){
+  const copyTasks=tasks.map(t=>t.id===editingId?{...t,images:candidateImages}:t);
+  if(editingId&&!tasks.some(t=>t.id===editingId)){
+    copyTasks.push({images:candidateImages});
+  }
+  const jsonStr=JSON.stringify({version:1,moveDate,tasks:copyTasks});
+  return new TextEncoder().encode(jsonStr).length;
+}
 function readPdfAsDataUrl(file){
   return new Promise((resolve,reject)=>{
-    if(file.size>2_000_000){
-      reject(new Error(`PDF「${file.name}」は2MBを超えているため添付できません。2MB以下のファイルをお選びください。`));
+    if(file.size>MAX_PDF_BYTES){
+      reject(new Error(`PDF「${file.name}」は500KBを超えているため添付できません（共有上限対策のため、500KB以下のファイルをお選びください）。`));
       return;
     }
     const reader=new FileReader();
@@ -462,6 +481,7 @@ function closeFilePreview(){
 function openEditor(id){const task=tasks.find(t=>t.id===id);editorOriginal=task?structuredClone(task):null;$("taskId").value=task?task.id:"";$("dialogTitle").textContent=task?"タスクを編集":"タスクを追加";$("taskTitle").value=task?.title||"";$("taskStart").value=task?.start||localToday();$("taskEnd").value=task?.end||localToday();$("taskStatus").value=(task?.status==="hold"||!VALID_STATUSES.has(task?.status))?"todo":(task?.status||"todo");$("taskCategory").value=task?.category||"その他";setProgressValue(task?task.progress:0);setConfirmedValue(task?.confirmed);$("taskNotes").value=task?.notes||"";currentEditorImages=task&&Array.isArray(task.images)?structuredClone(task.images):[];renderImageGallery();$("formError").hidden=true;$("deleteButton").hidden=!task;$("taskDialog").showModal();$("taskTitle").focus();}
 function closeEditor(){$("taskDialog").close();}
 function saveEditor(e){e.preventDefault();const id=$("taskId").value,title=$("taskTitle").value.trim(),start=$("taskStart").value,end=$("taskEnd").value,status=$("taskStatus").value,category=$("taskCategory").value;const error=$("formError");if(!title||!validDate(start)||!validDate(end)||isoToDay(start)>isoToDay(end)){error.textContent="タスク名、開始日、終了日を正しく入力してください。";error.hidden=false;return;}
+  if(estimateTotalBytesWithEditor(currentEditorImages,id||"__new__")>950_000){error.textContent="全タスクの添付ファイル合計容量が共有上限（約900KB）を超えています。添付ファイルを減らしてください。";error.hidden=false;return;}
   const old=tasks.find(t=>t.id===id);const wasDone=old?old.status==="done":false;const task={id:old?.id||makeId(),title:title.slice(0,100),start,end,status,category,progress:status==="done"?100:Number($("taskProgress").value),notes:$("taskNotes").value.slice(0,1000),confirmed:$("taskConfirmed").value==="true",images:currentEditorImages};
   if(old){for(const key of ["title","start","end","status","category","progress","notes","confirmed","images"])if(!editorOriginal||task[key]!==editorOriginal[key])old[key]=task[key];if(isoToDay(old.start)>isoToDay(old.end)){Object.assign(old,editorOriginal);error.textContent="相手の日程変更と重なりました。開き直して日付を確認してください。";error.hidden=false;return;}}else if(id&&editorOriginal){error.textContent="このタスクは相手が削除しました。閉じて一覧をご確認ください。";error.hidden=false;return;}else tasks.push(task);
   const targetTask=old||task;const isDone=targetTask.status==="done";
@@ -504,15 +524,21 @@ function init(){
       for(const file of targets){
         const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
         const isImg=file.type.startsWith("image/");
+        let item=null;
         if(isPdf){
-          const pdfItem=await readPdfAsDataUrl(file);
-          currentEditorImages.push(pdfItem);
+          item=await readPdfAsDataUrl(file);
         }else if(isImg){
-          const imgItem=await compressImage(file);
-          currentEditorImages.push(imgItem);
+          item=await compressImage(file);
         }else{
           alert(`「${file.name}」は非対応の形式です。画像またはPDFファイルを選択してください。`);
+          continue;
         }
+        const projected=estimateTotalBytesWithEditor([...currentEditorImages,item],$("taskId").value||"__new__");
+        if(projected>MAX_SYNC_BYTES){
+          alert(`「${file.name}」を追加すると、全タスクの合計容量が共有上限（約900KB）を超えるため追加できません。\n既存の添付ファイルを削除するか、小さいファイルをお選びください。`);
+          break;
+        }
+        currentEditorImages.push(item);
       }
       renderImageGallery();
     }catch(err){
